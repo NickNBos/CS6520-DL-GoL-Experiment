@@ -61,6 +61,27 @@ def import_all():
     ], how='diagonal')
 
 
+# Names for the 15 most common patterns, which account for 99.9% of objects
+# found in random soups.
+TOP_15 = {
+    'xs14_g88m952z121': 'half-bakery',
+    'xs6_25a4': 'barge',
+    'xp2_318c': 'beacon',
+    'xs12_g8o653z11': 'ship-tie',
+    'xp2_7e': 'toad',
+    'xs7_25ac': 'long boat',
+    'xs8_6996': 'pond',
+    'xs4_252': 'tub',
+    'xs6_356': 'ship',
+    'xs5_253': 'boat',
+    'xs7_2596': 'loaf',
+    'xq4_153': 'glider',
+    'xs6_696': 'beehive',
+    'xp2_7': 'blinker',
+    'xs4_33': 'block'
+}
+
+
 def process(df):
     return df.with_columns(
         # For all category columns, make sure they're boolean typed and replace
@@ -72,12 +93,19 @@ def process(df):
         # For all feature columns, make sure they're integer typed. For size,
         # null values make sense, since we only have data for the still lifes.
         # For period, the only null values should come from the still lifes,
-        # which logically have a period of 0.
+        # which logically have a period of 1.
         pl.col('size').cast(pl.Int64),
-        pl.col('period').cast(pl.Int64).fill_null(0),
+        pl.col('period').cast(pl.Int64).fill_null(1),
 
         # TODO: Maybe store rendered patterns here and compute basic metrics
         # from them, like the shape of the rendered pattern?
+    ).join(
+        # Add names for the top-15 most recognized patterns. Rare patterns are
+        # marked by a null value.
+        pl.DataFrame({
+            'apgcode': TOP_15.keys(),
+            'top_15': TOP_15.values()
+        }), on='apgcode', how='left'
     )
 
 
