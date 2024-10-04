@@ -85,7 +85,7 @@ if __name__ == '__main__':
     dataset = GameOfLifeDataset()
     dataloader = DataLoader(dataset, batch_size=25, shuffle=True)
     for batch in dataloader:
-        for i, (x, y) in enumerate(np.ndindex(5, 5)):
+        for i in range(25):
             plt.subplot(5, 5, i + 1)
             plt.imshow(batch['initial_state'][i].squeeze(), cmap='Greys')
             category = CATEGORY_NAMES[batch['category'][i]]
