@@ -1,6 +1,7 @@
 from urllib import request
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 
 # The Catagolue has many different object collections produced by different
@@ -12,6 +13,29 @@ import polars as pl
 URL_PREFIX ='https://catagolue.hatsya.com/textcensus/b3s23/C1'
 
 OUTPUT_PATH = Path('catagolue.parquet')
+
+# Names for the 15 most common patterns, which account for 99.9% of objects
+# found in random soups.
+TOP_15 = {
+    'xs4_33': 'block',
+    'xs5_253': 'boat',
+    'xs7_2596': 'loaf',
+    'xq4_153': 'glider',
+    'xs6_696': 'beehive',
+    'xp2_7': 'blinker',
+    'xs6_356': 'ship',
+    'xs4_252': 'tub',
+    'xs8_6996': 'pond',
+    'xs7_25ac': 'long boat',
+    'xp2_7e': 'toad',
+    'xs12_g8o653z11': 'ship-tie',
+    'xp2_318c': 'beacon',
+    'xs6_25a4': 'barge',
+    'xs14_g88m952z121': 'half-bakery',
+}
+TOP_15_NAMES = list(TOP_15.values()) + ['other']
+
+CATEGORY_NAMES = ['still_life', 'oscillator', 'spaceship', 'other']
 
 
 def fetch_csv(url):
@@ -28,7 +52,11 @@ def import_still_lifes():
     return pl.concat([
         fetch_csv(
             f'{URL_PREFIX}/xs{size}'
-        ).with_columns(still_life=True, size=size)
+        ).with_columns(
+            category=CATEGORY_NAMES.index('still_life'),
+            size=size,
+            period=1
+        )
         for size in sizes
     ])
 
@@ -38,7 +66,10 @@ def import_oscillators():
     return pl.concat([
         fetch_csv(
             f'{URL_PREFIX}/xp{period}'
-        ).with_columns(oscillator=True, period=period)
+        ).with_columns(
+            category=CATEGORY_NAMES.index('oscillator'),
+            period=period
+        )
         for period in periods
     ])
 
@@ -48,7 +79,10 @@ def import_spaceships():
     return pl.concat([
         fetch_csv(
             f'{URL_PREFIX}/xq{period}'
-        ).with_columns(spaceship=True, period=period)
+        ).with_columns(
+            category=CATEGORY_NAMES.index('spaceship'),
+            period=period
+        )
         for period in periods
     ])
 
@@ -61,55 +95,31 @@ def import_all():
     ], how='diagonal')
 
 
-# Names for the 15 most common patterns, which account for 99.9% of objects
-# found in random soups.
-TOP_15 = {
-    'xs14_g88m952z121': 'half-bakery',
-    'xs6_25a4': 'barge',
-    'xp2_318c': 'beacon',
-    'xs12_g8o653z11': 'ship-tie',
-    'xp2_7e': 'toad',
-    'xs7_25ac': 'long boat',
-    'xs8_6996': 'pond',
-    'xs4_252': 'tub',
-    'xs6_356': 'ship',
-    'xs5_253': 'boat',
-    'xs7_2596': 'loaf',
-    'xq4_153': 'glider',
-    'xs6_696': 'beehive',
-    'xp2_7': 'blinker',
-    'xs4_33': 'block'
-}
-
 
 def process(df):
-    return df.with_columns(
-        # For all category columns, make sure they're boolean typed and replace
-        # empty values with False.
-        pl.col('still_life').cast(bool).fill_null(False),
-        pl.col('oscillator').cast(bool).fill_null(False),
-        pl.col('spaceship').cast(bool).fill_null(False),
-
-        # For all feature columns, make sure they're integer typed. For size,
-        # null values make sense, since we only have data for the still lifes.
-        # For period, the only null values should come from the still lifes,
-        # which logically have a period of 1.
-        pl.col('size').cast(pl.Int64),
-        pl.col('period').cast(pl.Int64).fill_null(1),
-
-        # TODO: Maybe store rendered patterns here and compute basic metrics
-        # from them, like the shape of the rendered pattern?
-    ).join(
+    # TODO: Insert some number of 'fizzlers' also, with category == 'other'.
+    return df.join(
         # Add names for the top-15 most recognized patterns. Rare patterns are
         # marked by a null value.
         pl.DataFrame({
             'apgcode': TOP_15.keys(),
-            'top_15': TOP_15.values()
+            'top_15': np.arange(15)
         }), on='apgcode', how='left'
+    ).with_columns(
+        # Make sure features loaded directly from CSV are integer typed.
+        pl.col('size').cast(pl.Int64),
+        pl.col('period').cast(pl.Int64),
+
+        # Make sure any object that isn't in the top 15 is categorized as
+        # 'other' rather than null, for consistency.
+        pl.col('top_15').fill_null(TOP_15_NAMES.index('other')),
+
+        # TODO: Maybe store rendered patterns here and compute basic metrics
+        # from them, like the shape of the rendered pattern?
     )
 
 
-if __name__ == '__main__':
+def regenerate_catagolue_data():
     if not OUTPUT_PATH.exists():
         print('Downloading pattern data from Catagolue...')
         df = import_all()
@@ -121,3 +131,15 @@ if __name__ == '__main__':
     df = process(df)
     df.write_parquet(OUTPUT_PATH)
     print('Done')
+    return df
+
+
+def load_catagolue_data():
+    if OUTPUT_PATH.exists():
+        return pl.read_parquet(OUTPUT_PATH)
+    else:
+        return regenerate_catagolue_data()
+
+
+if __name__ == '__main__':
+    regenerate_catagolue_data()

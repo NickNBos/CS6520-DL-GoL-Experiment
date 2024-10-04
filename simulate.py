@@ -33,20 +33,24 @@ class GameOfLife(nn.Module):
 
 simulator = torch.compile(GameOfLife())
 
-def simulate(initial_states, steps):
+def simulate_batch(initial_states, steps):
     batch_size, height, width = initial_states.shape
     num_channels = 1
 
-    frames = torch.zeros((steps, batch_size, num_channels, height, width))
-    frames[0, :, 0] = torch.from_numpy(initial_states)
+    frames = torch.zeros((batch_size, steps + 1, num_channels, height, width))
+    frames[:, 0, 0] = torch.from_numpy(initial_states)
     frames = frames.to(DEVICE)
 
     with torch.no_grad():
-        for step in range(1, steps):
-            frames[step] = simulator(frames[step - 1])
+        for step in range(1, steps + 1):
+            frames[:, step] = simulator(frames[:, step - 1])
 
     # Drop the channel dimension, since there's always one channel.
     return frames.cpu().numpy()[:, :, 0, :, :]
+
+
+def simulate_one(initial_state, steps):
+    return simulate_batch(np.expand_dims(initial_state, 0), steps).squeeze()
 
 
 # A demo to simulate and display a glider to show this is working.
@@ -58,7 +62,7 @@ if __name__ == '__main__':
         [0.0, 0.0, 1.0],
         [1.0, 1.0, 1.0]
     ])
-    initial_states = np.zeros((1, 12, 12))
-    initial_states[0, 3:6, 3:6] = glider
-    frames = simulate(initial_states, 48)[:, 0, :, :]
+    initial_states = np.zeros((12, 12))
+    initial_states[3:6, 3:6] = glider
+    frames = simulate_one(initial_states, 48)
     view_animation(frames)
