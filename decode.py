@@ -92,24 +92,44 @@ class Decoder:
     
         return x_array
     
+    # Functions past this point expect the array form of x, from decode()
+    def find_corners(self, x):
+        # Retrieve the bottom left and top right corners
+        locations = np.where(x==1)
+        dim_1 = locations[0]
+        dim_2 = locations[1]
+        
+        bottom_left = (min(dim_1), min(dim_2))
+        top_right = (max(dim_1), max(dim_2))
+        
+        return (bottom_left, top_right)
+    
+    def clip_excess(self, x, corners):
+        lows = corners[0]
+        highs = corners[1]
+        # Need to add 1, numpy has non-inclusive upper bounds
+        return x[lows[0]:highs[0]+1, lows[1]:highs[1]+1]
+    
     def add_padding(self, x, new_size = WORLD_SIZE):
         old_height, old_width = x.shape
     
-        assert old_height <= new_size, 'Height must be larger in new object'
-        assert old_width <= new_size, 'Width must be larger in new object'
+        if type(new_size) is int:
+            new_size = [new_size, new_size]
     
-        new_x = np.zeros((new_size,new_size), dtype=int)
+        assert old_height <= new_size[0], 'Height must be larger in new object'
+        assert old_width <= new_size[1], 'Width must be larger in new object'
+    
+        new_x = np.zeros((new_size[0],new_size[1]), dtype=int)
     
         # Find a spot that will center the original image
-        new_start_row = int(new_size/2) - int(old_width/2)
-        new_start_col = int(new_size/2) - int(old_width/2)
+        new_start_row = int(new_size[0]/2) - int(old_height/2)
+        new_start_col = int(new_size[1]/2) - int(old_width/2)
     
         # Put the old data into the new, larger/uniform array
         new_x[new_start_row:new_start_row + old_height,
               new_start_col:new_start_col + old_width] = x
     
         return new_x
-    
     
     def visualize(self, x):
         plt.imshow(x, cmap="Greys")
@@ -127,13 +147,20 @@ class Decoder:
 if __name__ == '__main__':
 
     example_list = ['xs4_33', 'xs4_252', 'xq4_a1hh197zx6777be4', 'xq4_027deee6z4eqscc6']
-
+    decoder = Decoder()
     for example in example_list:
-        decoder = Decoder()
         decoded_example = decoder.decode(example)
-        
-        resized_example = decoder.add_padding(decoded_example)
 
+        corners = decoder.find_corners(decoded_example)
+        
+        clipped_example = decoder.clip_excess(decoded_example, corners)
+        
+        slight_padding = np.array(clipped_example.shape) + 2
+        
+        resized_example = decoder.add_padding(clipped_example, slight_padding)
+        
+        print(resized_example)
         plt.figure(example, clear=True)
         decoder.visualize(resized_example)
         plt.show()
+        
