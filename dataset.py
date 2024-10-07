@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
 from constants import MAX_PERIOD, VARIATIONS_PER_IMAGE, VIDEO_LEN, WORLD_SIZE
-from decode import add_padding, decode
+from decode import Decoder
 from import_data import CATEGORY_NAMES, TOP_15_NAMES, load_catagolue_data
 from simulate import simulate_one
 
@@ -49,7 +49,9 @@ class GameOfLifeDataset(Dataset):
         self.df = load_catagolue_data().filter(
             (pl.col('period').is_null()) | (pl.col('period') <= MAX_PERIOD)
         )
-
+        
+        self.decoder = Decoder()
+        
     def __len__(self):
         return len(self.df) * VARIATIONS_PER_IMAGE
 
@@ -59,7 +61,7 @@ class GameOfLifeDataset(Dataset):
         # TODO: It would probably be better to pre-render and compute sizes for
         # all the objects to better support compositions when we get to video
         # segmentation later, and to avoid repeated computation.
-        obj = add_padding(decode(obj_data.select('apgcode').item()))
+        obj = self.decoder.add_padding(self.decoder.decode(obj_data.select('apgcode').item()))
         obj = random_transform(i, obj, obj_data)
 
         # Return samples from the Dataset for training.
