@@ -131,6 +131,12 @@ class Decoder:
     
         return new_x
     
+    def standard_one_pad(self, x):
+        # Combo function for easy use in list comprehension
+        clipped_x = self.clip_excess(x, self.find_corners(x))
+        one_padding = np.array(clipped_x.shape) + 2
+        return self.add_padding(clipped_x, one_padding)
+    
     def visualize(self, x):
         plt.imshow(x, cmap="Greys")
     
