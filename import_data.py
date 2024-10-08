@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from decode import Decoder
 # The Catagolue has many different object collections produced by different
 # random searches. For now, we just pull from the biggest collection, with the
 # object sub-categories hard coded. To get even more objects, we could read the
@@ -98,6 +99,15 @@ def import_all():
 
 def process(df):
     # TODO: Insert some number of 'fizzlers' also, with category == 'other'.
+    decoder = Decoder()
+
+    # The problem here is that polars doesn't play nice with numpy arrays,
+    # so the arrays must first be translated into lists
+    # Luckily, it seems that the sizes can be incongruent at least
+    shapes = [decoder.standard_one_pad(decoder.decode(apgcode)).tolist() for apgcode in df['apgcode']]
+    
+    df = df.drop('top_15')
+    
     return df.join(
         # Add names for the top-15 most recognized patterns. Rare patterns are
         # marked by a null value.
@@ -113,7 +123,7 @@ def process(df):
         # Make sure any object that isn't in the top 15 is categorized as
         # 'other' rather than null, for consistency.
         pl.col('top_15').fill_null(TOP_15_NAMES.index('other')),
-
+        pl.Series(name='shape', values=shapes),
         # TODO: Maybe store rendered patterns here and compute basic metrics
         # from them, like the shape of the rendered pattern?
     )
@@ -129,6 +139,9 @@ def regenerate_catagolue_data():
         df = pl.read_parquet(OUTPUT_PATH)
     print('Processing data...')
     df = process(df)
+    
+    # print(df)
+    
     df.write_parquet(OUTPUT_PATH)
     print('Done')
     return df
