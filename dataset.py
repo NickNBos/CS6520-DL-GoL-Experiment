@@ -12,9 +12,17 @@ SPLIT_RATIO = (70, 15, 15) # train, validate, test
 
 class GameOfLifeDataset(Dataset):
     def __init__(self, df, seed=0):
+        # We generate multiple random variations for each pattern in the
+        # database, scaled by some multiplier factor in order to upsample
+        # underrepresented categories. Since the Dataset logically contains
+        # more items than are in the data frame, we need a way to turn a
+        # Dataset index into a row in the dataframe. Here, we compute an
+        # index_threshold which represents the upper bound on a bucket of
+        # logical indices that correspond to this row.
         self.df = df.with_columns(
             index_threshold=pl.col('multiplier').cum_sum() * VARIATIONS_PER_IMAGE
         )
+        # Compute the total logical length and cache it for future lookups.
         self.length = self.df.select('multiplier').sum().item() * VARIATIONS_PER_IMAGE
         self.seed = seed
 
@@ -114,30 +122,60 @@ def split_df(df):
     return [df[row_group] for row_group in row_groups]
 
 
+def category_balanced_split(df, dataset_size=DATASET_SIZE):
+    categories = df['category'].unique().to_list()
+    target_size = dataset_size // VARIATIONS_PER_IMAGE // len(categories)
+
+    # Do a train / validate / test split on all the data.
+    train_all = pl.DataFrame()
+    validate_all = pl.DataFrame()
+    test_all = pl.DataFrame()
+    # For each category
+    for category in categories:
+        # Isolate that category's pattern data.
+        category_data = df.filter(
+            pl.col('category') == category
+        )
+        category_size = len(category_data)
+        # If this category is bigger than the target size, downsample.
+        if category_size > target_size:
+            category_data = category_data.sample(
+                target_size
+            ).with_columns(
+                multiplier=1
+            )
+        # If this category is smaller than the target size, upsample.
+        else:
+            category_data = category_data.with_columns(
+                multiplier = target_size // category_size
+            )
+
+        # Split the patterns from each category such that each pattern will
+        # only appear in one of train, validate, or test.
+        train_cat, validate_cat, test_cat = split_df(category_data)
+
+        # Merge the per-category data.
+        train_all = pl.concat((train_all, train_cat))
+        validate_all = pl.concat((validate_all, validate_cat))
+        test_all = pl.concat((test_all, test_cat))
+    return (train_all, validate_all, test_all)
+
+
 def get_top_15_datasets():
     df = load_filtered_data()
     other = TOP_15_NAMES.index('other')
 
     # Create a dataframe containing only patterns not in the top 15.
-    # TODO: Represent categories evenly.
-    others = df.filter(
-        pl.col('top_15') == other
-    ).sample(
-        # Keep just a random sampling of the dataset to reach the target size.
-        # Half of the data will come from the top 15.
-        DATASET_SIZE // VARIATIONS_PER_IMAGE // 2
-    ).with_columns(
-        # Every pattern not in the top 15 is represented once.
-        multiplier=1
-    )
+    others = df.filter(pl.col('top_15') == other)
 
     # And another with just the top 15.
-    top_15 = df.filter(
-        pl.col('top_15') != other
-    )
+    top_15 = df.filter(pl.col('top_15') != other)
 
-    # Pick a random sampling of non-top-15 patterns for the three splits.
-    train_other, validate_other, test_other = split_df(others)
+    # Split the non-top-15 patterns into train, validate, and test data
+    # balanced by category. This will make up half of the final dataset, the
+    # other half coming from the top-15 patterns.
+    train_other, validate_other, test_other = category_balanced_split(
+        others, DATASET_SIZE // 2)
 
     # Add the top 15 patterns to all three of the splits. Note that we will
     # randomly generate initial states from these patterns, so it's unlikely /
@@ -182,42 +220,7 @@ def get_top_15_datasets():
 
 def get_category_datasets():
     df = load_filtered_data()
-
-    categories = df['category'].unique().to_list()
-    target_size = DATASET_SIZE // VARIATIONS_PER_IMAGE // len(categories)
-
-    # Do a train / validate / test split on all the data.
-    train_all = pl.DataFrame()
-    validate_all = pl.DataFrame()
-    test_all = pl.DataFrame()
-    # For each category
-    for category in categories:
-        # Isolate that category's pattern data.
-        category_data = df.filter(
-            pl.col('category') == category
-        )
-        category_size = len(category_data)
-        # If this category is bigger than the target size, downsample.
-        if category_size > target_size:
-            category_data = category_data.sample(
-                target_size
-            ).with_columns(
-                multiplier=1
-            )
-        # If this category is smaller than the target size, upsample.
-        else:
-            category_data = category_data.with_columns(
-                multiplier = target_size // category_size
-            )
-
-        # Split the patterns from each category such that each pattern will
-        # only appear in one of train, validate, or test.
-        train_cat, validate_cat, test_cat = split_df(category_data)
-
-        # Merge the per-category data.
-        train_all = pl.concat((train_all, train_cat))
-        validate_all = pl.concat((validate_all, validate_cat))
-        test_all = pl.concat((test_all, test_cat))
+    train_all, validate_all, test_all = category_balanced_split(df)
 
     # Build DataSets from the split data.
     return (
@@ -230,7 +233,7 @@ def get_category_datasets():
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
-    train_data, validate_data, test_data = get_top_15_datasets()
+    train_data, validate_data, test_data = get_category_datasets()
     dataloader = DataLoader(train_data, batch_size=25, shuffle=True)
     for batch in dataloader:
         for i in range(25):
