@@ -11,7 +11,7 @@ from decode import Decoder
 # index pages from many searches and scrape their size and period lists to
 # download everything. Not doing that for now, since there's a high degree of
 # redundancy (most searches find the same objects, again and again)
-URL_PREFIX ='https://catagolue.hatsya.com/textcensus/b3s23/C1'
+CENSUS_PREFIX ='https://catagolue.hatsya.com/textcensus/b3s23/C1'
 
 OUTPUT_PATH = Path('catagolue.parquet')
 
@@ -52,7 +52,7 @@ def import_still_lifes():
     ]
     return pl.concat([
         fetch_csv(
-            f'{URL_PREFIX}/xs{size}'
+            f'{CENSUS_PREFIX}/xs{size}'
         ).with_columns(
             category=CATEGORY_NAMES.index('still_life'),
             size=size,
@@ -66,7 +66,7 @@ def import_oscillators():
     periods = [ 2, 3, 4, 5, 6, 8, 14, 15, 16, 24, 30, 46, 120 ]
     return pl.concat([
         fetch_csv(
-            f'{URL_PREFIX}/xp{period}'
+            f'{CENSUS_PREFIX}/xp{period}'
         ).with_columns(
             category=CATEGORY_NAMES.index('oscillator'),
             period=period
@@ -77,15 +77,31 @@ def import_oscillators():
 
 def import_spaceships():
     periods = [ 4, 7, 12, 16 ]
-    return pl.concat([
+    census_spaceships = [
         fetch_csv(
-            f'{URL_PREFIX}/xq{period}'
+            f'{CENSUS_PREFIX}/xq{period}'
         ).with_columns(
             category=CATEGORY_NAMES.index('spaceship'),
             period=period
         )
         for period in periods
-    ])
+    ]
+
+    # The main census we use has very few spaceships, and they're almost all
+    # period 4. To get a more diverse set of samples, we also use a supplental
+    # dataset with wider coverage.
+    periods = [3, 4, 5, 6, 7, 8, 10, 12, 16, 20, 24, 28, 30, 96]
+    extra_spaceships = [
+        fetch_csv(
+            f'https://catagolue.hatsya.com/textcensus/b3s23/shipthread_stdin/xq{period}'
+        ).with_columns(
+            category=CATEGORY_NAMES.index('spaceship'),
+            period=period
+        )
+        for period in periods
+    ]
+
+    return pl.concat(census_spaceships + extra_spaceships)
 
 
 def import_all():
@@ -99,16 +115,28 @@ def import_all():
 
 def process(df):
     # TODO: Insert some number of 'fizzlers' also, with category == 'other'.
-    decoder = Decoder()
 
+    # Pre-render all the patterns from their apgcodes.
+    decoder = Decoder()
     # The problem here is that polars doesn't play nice with numpy arrays,
     # so the arrays must first be translated into lists
     # Luckily, it seems that the sizes can be incongruent at least
-    shapes = [decoder.standard_one_pad(decoder.decode(apgcode)).tolist() for apgcode in df['apgcode']]
-    
-    df = df.drop('top_15')
-    
-    return df.join(
+    patterns = [
+        decoder.standard_one_pad(decoder.decode(apgcode)).tolist()
+        for apgcode in df['apgcode']
+    ]
+
+    # Compute metadata about each pattern.
+    # TODO: It might be better to find the maximum size, width, and height of a
+    # pattern over its full period.
+    sizes = [ np.count_nonzero(pattern) for pattern in patterns ]
+    heights = [ len(pattern) for pattern in patterns ]
+    widths = [ len(pattern[0]) for pattern in patterns ]
+
+    # Regenerate all computed columns
+    return df.drop(
+        'top_15', 'pattern', 'size', 'width', 'height'
+    ).join(
         # Add names for the top-15 most recognized patterns. Rare patterns are
         # marked by a null value.
         pl.DataFrame({
@@ -116,16 +144,13 @@ def process(df):
             'top_15': np.arange(15)
         }), on='apgcode', how='left'
     ).with_columns(
-        # Make sure features loaded directly from CSV are integer typed.
-        pl.col('size').cast(pl.Int64),
-        pl.col('period').cast(pl.Int64),
-
         # Make sure any object that isn't in the top 15 is categorized as
         # 'other' rather than null, for consistency.
         pl.col('top_15').fill_null(TOP_15_NAMES.index('other')),
-        pl.Series(name='shape', values=shapes),
-        # TODO: Maybe store rendered patterns here and compute basic metrics
-        # from them, like the shape of the rendered pattern?
+        pl.Series(name='pattern', values=patterns),
+        pl.Series(name='size', values=sizes),
+        pl.Series(name='width', values=widths),
+        pl.Series(name='height', values=heights),
     )
 
 
@@ -139,9 +164,6 @@ def regenerate_catagolue_data():
         df = pl.read_parquet(OUTPUT_PATH)
     print('Processing data...')
     df = process(df)
-    
-    # print(df)
-    
     df.write_parquet(OUTPUT_PATH)
     print('Done')
     return df
