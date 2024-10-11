@@ -77,7 +77,7 @@ def import_oscillators():
 
 def import_spaceships():
     periods = [ 4, 7, 12, 16 ]
-    census_spaceships = [
+    census_spaceships = pl.concat([
         fetch_csv(
             f'{CENSUS_PREFIX}/xq{period}'
         ).with_columns(
@@ -85,13 +85,13 @@ def import_spaceships():
             period=period
         )
         for period in periods
-    ]
+    ])
 
     # The main census we use has very few spaceships, and they're almost all
     # period 4. To get a more diverse set of samples, we also use a supplental
     # dataset with wider coverage.
     periods = [3, 4, 5, 6, 7, 8, 10, 12, 16, 20, 24, 28, 30, 96]
-    extra_spaceships = [
+    extra_spaceships = pl.concat([
         fetch_csv(
             f'https://catagolue.hatsya.com/textcensus/b3s23/shipthread_stdin/xq{period}'
         ).with_columns(
@@ -99,9 +99,25 @@ def import_spaceships():
             period=period
         )
         for period in periods
-    ]
+    ])
 
-    return pl.concat(census_spaceships + extra_spaceships)
+    # Merge the data from the two sources.
+    return census_spaceships.join(
+        extra_spaceships,
+        on=['apgcode', 'category', 'period'],
+        how='full',
+        coalesce=True
+    ).with_columns(
+        # The occurrence columns don't match between the two data sources, so
+        # make a new column by summing them.
+        occurrences=(
+            pl.col('occurrences').fill_null(0) +
+            pl.col('occurrences_right').fill_null(0)
+        )
+    ).drop(
+        # Drop the occurrence data from the second data source.
+        'occurrences_right'
+    )
 
 
 def import_all():
