@@ -5,12 +5,13 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
 from constants import MAX_PERIOD, VARIATIONS_PER_IMAGE, VIDEO_LEN, WORLD_SIZE
-from decode import Decoder
 from import_data import CATEGORY_NAMES, TOP_15_NAMES, load_catagolue_data
 from simulate import simulate_one
 
 
-def random_transform(seed, obj, obj_data):
+def random_transform(seed, obj_data):
+    obj = np.array(obj_data.select('shape').item().to_list())
+
     # Choose random numbers deterministically so we apply the same transforms
     # every time we load an image.
     rng = np.random.default_rng(seed)
@@ -26,12 +27,14 @@ def random_transform(seed, obj, obj_data):
     # Rotate
     obj = np.rot90(obj, k=rng.integers(4))
 
-    # Translate
-    obj = np.roll(obj, rng.integers(WORLD_SIZE), axis=0)
-    obj = np.roll(obj, rng.integers(WORLD_SIZE), axis=1)
+    # Place the object into the initial state at a random position.
+    initial_state = np.zeros((WORLD_SIZE, WORLD_SIZE))
+    initial_state[:obj.shape[0], :obj.shape[1]] = obj
+    initial_state = np.roll(initial_state, rng.integers(WORLD_SIZE), axis=0)
+    initial_state = np.roll(initial_state, rng.integers(WORLD_SIZE), axis=1)
 
     # Torch needs the object in a contiguous block of memory.
-    obj = np.ascontiguousarray(obj)
+    initial_state = np.ascontiguousarray(initial_state)
 
     # Step simulation
     period = obj_data.select('period').item()
@@ -39,9 +42,9 @@ def random_transform(seed, obj, obj_data):
         steps = rng.integers(period)
         if steps > 0:
             # Simulate for some number of steps, then grab the last frame.
-            obj = simulate_one(obj, steps)[-1]
+            initial_state = simulate_one(initial_state, steps)[-1]
 
-    return obj
+    return initial_state
 
 
 class GameOfLifeDataset(Dataset):
@@ -49,20 +52,14 @@ class GameOfLifeDataset(Dataset):
         self.df = load_catagolue_data().filter(
             (pl.col('period').is_null()) | (pl.col('period') <= MAX_PERIOD)
         )
-        
-        self.decoder = Decoder()
-        
+
     def __len__(self):
         return len(self.df) * VARIATIONS_PER_IMAGE
 
     def __getitem__(self, i):
         # Actually lookup and augment the object data to simulate.
         obj_data = self.df[i // VARIATIONS_PER_IMAGE]
-        # TODO: It would probably be better to pre-render and compute sizes for
-        # all the objects to better support compositions when we get to video
-        # segmentation later, and to avoid repeated computation.
-        obj = self.decoder.add_padding(self.decoder.decode(obj_data.select('apgcode').item()))
-        obj = random_transform(i, obj, obj_data)
+        initial_state = random_transform(i, obj_data)
 
         # Return samples from the Dataset for training.
         return {
@@ -70,7 +67,7 @@ class GameOfLifeDataset(Dataset):
             # NOTE: To work with video data, use a DataLoader to fetch a whole
             # batch of initial states, then simulate them in one shot before
             # passing them in as training data.
-            'initial_state': obj,
+            'initial_state': initial_state,
             # What kind of object is this (still_life, oscillator, spaceship,
             # or other)?
             'category': obj_data.select('category').to_numpy().flatten(),
