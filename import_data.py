@@ -122,10 +122,11 @@ def import_spaceships():
     )
 
 
-def import_fizzlers():
+def create_fizzlers(sizes = [6], goal = 500, tries = 5000):
+    
     fizzler_list = []
-    for size in range(3,6):
-        fizzler_list.extend(gfz.generate(size))
+    for size in sizes:
+        fizzler_list.extend(gfz.generate(size, goal, tries))
     
     patterns = []
     lifespans = []
@@ -141,11 +142,14 @@ def import_fizzlers():
     heights = [ len(pattern) for pattern in patterns ]
     widths = [ len(pattern[0]) for pattern in patterns ]
     
-    data = {"period":lifespans,"patterns":patterns,"sizes":sizes,"heights":heights,"widths":widths}
+    categories = [-1 for _ in patterns]
     
-    df = pl.DataFrame(data)
-    # TODO: Finish combining with the dataframe proper
-    # Perhaps ensure some way to first eliminate old fizzlers (otherwise problems may ensue)
+    data = {"category":categories,"pattern":patterns,"lifespan":lifespans,"size":sizes,"width":widths, "height":heights}
+    
+    # Janky workaround for ensuring catagory is the same dtype (i32)
+    df = pl.DataFrame(data).with_columns(pl.col('category').cast(pl.Int32))
+    
+    return df
     
 def import_all():
     return pl.concat([
@@ -157,8 +161,9 @@ def import_all():
 
 
 def process(df):
-    # TODO: Insert some number of 'fizzlers' also, with category == 'other'.
-
+    # First, remove all old fizzlers
+    df = df.filter(pl.col("category") != -1)
+    
     # Pre-render all the patterns from their apgcodes.
     decoder = Decoder()
     # The problem here is that polars doesn't play nice with numpy arrays,
@@ -195,8 +200,7 @@ def process(df):
         pl.Series(name='width', values=widths),
         pl.Series(name='height', values=heights),
     )
-
-
+        
 def regenerate_catagolue_data():
     if not OUTPUT_PATH.exists():
         print('Downloading pattern data from Catagolue...')
@@ -205,10 +209,27 @@ def regenerate_catagolue_data():
     else:
         print('Using cached Catagolue data.')
         df = pl.read_parquet(OUTPUT_PATH)
+        print(df.columns)
     print('Processing data...')
     df = process(df)
+    
+    print('Adding fizzlers...')
+    df = pl.concat([
+        create_fizzlers(),
+        df
+    ], how='diagonal')
+
     df.write_parquet(OUTPUT_PATH)
     print('Done')
+    
+    # Debug print to determine how many of each type exist
+    # I believe it is as follows:
+        # 0: Still-life
+        # 1: Oscillator
+        # 2: Spaceship
+        # -1: Fizzler
+    # print(df['category'].value_counts())
+    
     return df
 
 
