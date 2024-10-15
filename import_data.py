@@ -5,6 +5,8 @@ import numpy as np
 import polars as pl
 
 from decode import Decoder
+import generate_fizzlers as gfz
+
 # The Catagolue has many different object collections produced by different
 # random searches. For now, we just pull from the biggest collection, with the
 # object sub-categories hard coded. To get even more objects, we could read the
@@ -120,6 +122,27 @@ def import_spaceships():
     )
 
 
+def import_fizzlers():
+    fizzler_list = []
+    for size in range(3,6):
+        fizzler_list.extend(gfz.generate(size))
+    
+    patterns = []
+    lifespans = []
+    for fizzler in fizzler_list:
+        patterns.append(fizzler[0])
+        lifespans.append(fizzler[1])
+    
+    # return pl.concat([
+    #     with_columns(
+    #         category=CATEGORY_NAMES.index('oscillator'),
+    #         period=period
+    #     )
+    #     for period in periods
+    # ])
+
+        
+        
 def import_all():
     return pl.concat([
         import_still_lifes(),
