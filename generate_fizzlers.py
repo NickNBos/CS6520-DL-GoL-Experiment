@@ -46,7 +46,7 @@ def make_pattern(size = 3):
     else:
         return None, None
     
-def generate(size = 3, goal = 50, tries = 200):
+def generate(size = 5, goal = 500, tries = 2500):
     
     # Max out at some large number if tries is none
     if tries is None:
@@ -69,5 +69,5 @@ def generate(size = 3, goal = 50, tries = 200):
 
 
 if __name__ == '__main__':
-    fizzlers = generate(3)
+    fizzlers = generate(5)
     
