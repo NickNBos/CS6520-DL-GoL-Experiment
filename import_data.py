@@ -130,19 +130,23 @@ def import_fizzlers():
     patterns = []
     lifespans = []
     for fizzler in fizzler_list:
-        patterns.append(fizzler[0])
-        lifespans.append(fizzler[1])
+        # Another redundancy to prevent duplicates
+        # as the padding can throw off the size enforcement
+        if fizzler[0] not in patterns:
+            patterns.append(fizzler[0])
+            lifespans.append(fizzler[1])
     
-    # return pl.concat([
-    #     with_columns(
-    #         category=CATEGORY_NAMES.index('oscillator'),
-    #         period=period
-    #     )
-    #     for period in periods
-    # ])
-
-        
-        
+    # Cop some extra info
+    sizes = [ np.count_nonzero(pattern) for pattern in patterns ]
+    heights = [ len(pattern) for pattern in patterns ]
+    widths = [ len(pattern[0]) for pattern in patterns ]
+    
+    data = {"period":lifespans,"patterns":patterns,"sizes":sizes,"heights":heights,"widths":widths}
+    
+    df = pl.DataFrame(data)
+    # TODO: Finish combining with the dataframe proper
+    # Perhaps ensure some way to first eliminate old fizzlers (otherwise problems may ensue)
+    
 def import_all():
     return pl.concat([
         import_still_lifes(),
