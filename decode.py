@@ -45,7 +45,6 @@ class Decoder:
     def decode(self, x_string):
         # Ignore everything before the underscore
         x_string = x_string.split('_')[1]
-    
         # First, process all non - 0-9 a-v characters first
         # So w, x, y, z
     
@@ -53,10 +52,9 @@ class Decoder:
         # Of these, start with yy, to avoid erroneously thinking that
         # the second y pairs with the following character
         x_string = x_string.replace('yy', self.y_map['yy'])
-    
-        for y_code, zero_string in self.y_map:
+        
+        for y_code, zero_string in self.y_map.items():
             x_string = x_string.replace(y_code, zero_string)
-    
     
         # Then get w, x, and z
         x_string = x_string.replace('w', '00')
@@ -152,7 +150,8 @@ class Decoder:
 
 if __name__ == '__main__':
 
-    example_list = ['xs4_33', 'xs4_252', 'xq4_a1hh197zx6777be4', 'xq4_027deee6z4eqscc6']
+    #example_list = ['xs4_33', 'xs4_252', 'xq4_a1hh197zx6777be4', 'xq4_027deee6z4eqscc6']
+    example_list = ['xq4_i23m3y2ggz102778cew5soalzy8qqaammea6e0oggzya111y1115oc']
     decoder = Decoder()
     for example in example_list:
         decoded_example = decoder.decode(example)
@@ -167,6 +166,7 @@ if __name__ == '__main__':
         
         print(resized_example)
         plt.figure(example, clear=True)
-        decoder.visualize(resized_example)
+        decoder.visualize(clipped_example)
+        # decoder.visualize(resized_example)
         plt.show()
         
