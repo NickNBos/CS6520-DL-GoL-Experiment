@@ -78,7 +78,7 @@ if __name__ == '__main__':
         pattern = np.array(pattern_data['pattern'].to_list()).squeeze()
 
         # Animate a simple scene containing this pattern.
-        initial_state = np.zeros((64, 64))
+        initial_state = np.zeros((32, 32))
         initial_state[:pattern.shape[0], :pattern.shape[1]] = pattern
         frames = simulate_one(initial_state, 50)
         view_animation(frames)
