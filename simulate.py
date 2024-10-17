@@ -55,14 +55,30 @@ def simulate_one(initial_state, steps):
 
 # A demo to simulate and display a glider to show this is working.
 if __name__ == '__main__':
+    import polars as pl
     from visualize import view_animation
+    from import_data import load_catagolue_data
 
-    glider = np.array([
-        [0.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0],
-        [1.0, 1.0, 1.0]
-    ])
-    initial_states = np.zeros((12, 12))
-    initial_states[3:6, 3:6] = glider
-    frames = simulate_one(initial_states, 48)
-    view_animation(frames)
+    # Load and filter pattern data.
+    df = load_catagolue_data().filter(
+        pl.col('category') == 2 # spaceships
+    ).with_columns(
+        extent=pl.max_horizontal('width', 'height')
+    )
+
+    # Try animating patterns of various sizes to sanity check their behavior.
+    for max_extent in [8, 16, 24, 32]:
+        # Grab a random pattern in the current size bucket.
+        min_extent = max_extent - 8
+        pattern_data = df.filter(
+            (pl.col('extent') > min_extent) &
+            (pl.col('extent') < max_extent)
+        ).sample()
+        print(pattern_data['apgcode'].item())
+        pattern = np.array(pattern_data['pattern'].to_list()).squeeze()
+
+        # Animate a simple scene containing this pattern.
+        initial_state = np.zeros((64, 64))
+        initial_state[:pattern.shape[0], :pattern.shape[1]] = pattern
+        frames = simulate_one(initial_state, 50)
+        view_animation(frames)
