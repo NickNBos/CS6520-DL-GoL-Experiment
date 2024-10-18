@@ -12,4 +12,10 @@ VARIATIONS_PER_IMAGE = 10
 
 # The desired size of the full dataset, before the train / validate / test
 # split. The actual size may be slightly smaller than this.
-DATASET_SIZE = 500_000
+# NOTE: The smallest size that works with the current implementation of data
+# set and our database is 11,000.
+DATASET_SIZE = 11_000
+
+# Training parameters
+BATCH_SIZE = 250
+NUM_EPOCHS = 10
