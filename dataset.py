@@ -9,6 +9,9 @@ from simulate import simulate_one
 
 SPLIT_RATIO = (70, 15, 15) # train, validate, test
 
+# Overrepresent the top 15 patterns to this fraction of the total dataset.
+TOP_15_FRAC = 0.1
+
 
 class GameOfLifeDataset(Dataset):
     def __init__(self, df, seed=0):
@@ -59,7 +62,7 @@ class GameOfLifeDataset(Dataset):
 
         # Step simulation
         period = pattern_data.select('period').item()
-        if period > 1:
+        if period is not None and period > 1:
             steps = rng.integers(period)
             if steps > 0:
                 # Simulate for some number of steps, then grab the last frame.
@@ -102,7 +105,7 @@ def load_filtered_data():
         (pl.col('width') < WORLD_SIZE) &
         (pl.col('height') < WORLD_SIZE) &
         # Filter out any patterns with a period bigger than we can detect
-        (pl.col('period') < MAX_PERIOD)
+        ((pl.col('period').is_null()) | (pl.col('period') < MAX_PERIOD))
     )
 
 
@@ -161,7 +164,7 @@ def category_balanced_split(df, dataset_size=DATASET_SIZE):
     return (train_all, validate_all, test_all)
 
 
-def get_top_15_datasets():
+def get_split_dataset():
     df = load_filtered_data()
     other = TOP_15_NAMES.index('other')
 
@@ -171,24 +174,30 @@ def get_top_15_datasets():
     # And another with just the top 15.
     top_15 = df.filter(pl.col('top_15') != other)
 
-    # Split the non-top-15 patterns into train, validate, and test data
-    # balanced by category. This will make up half of the final dataset, the
-    # other half coming from the top-15 patterns.
-    train_other, validate_other, test_other = category_balanced_split(
-        others, DATASET_SIZE // 2)
 
-    # Add the top 15 patterns to all three of the splits. Note that we will
-    # randomly generate initial states from these patterns, so it's unlikely /
-    # rare that the same initial_state will appear in both train and test,
-    # though some of the random variations will be quite similar. Note that in
-    # this case we actually want our model to memorize the top_15 patterns and
-    # not generalize, so this should be okay.
+    # Split the non-top-15 patterns into train, validate, and test data
+    # balanced by category. The top 15 patterns will make up TOP_15_FRAC of the
+    # total dataset, and the other patterns will make up the rest.
+    other_target_size = int(DATASET_SIZE * (1 - TOP_15_FRAC))
+    train_other, validate_other, test_other = category_balanced_split(
+        others, other_target_size)
+
+    # For categories, we avoid putting the same pattern into train and test
+    # datasets to maximize generalization. For the top_15 patterns, though, we
+    # need examples of each pattern in both the train and test to see if the
+    # model can generalize to different variations of the to same top 15
+    # patterns. So, we add the top 15 patterns to all three of the splits. Note
+    # that we will randomly generate initial states from these patterns, so
+    # it's very unlikely / rare that the same initial_state will appear in both
+    # train and test. This might cause the model to "memorize" the top_15
+    # patterns, but that is actually desirable for this task.
+    top_15_mult = TOP_15_FRAC / (1 - TOP_15_FRAC) / 15
     train_all = pl.concat([
         train_other,
         # The top 15 get oversampled so in total they have same representation
         # as the other category.
         top_15.with_columns(
-            multiplier=len(train_other) // 15
+            multiplier=int(len(train_other) * top_15_mult)
         )
     ])
     validate_all = pl.concat([
@@ -196,7 +205,7 @@ def get_top_15_datasets():
         # The top 15 get oversampled so in total they have same representation
         # as the other category.
         top_15.with_columns(
-            multiplier=len(validate_other) // 15
+            multiplier=int(len(validate_other) * top_15_mult)
         )
     ])
     test_all = pl.concat([
@@ -204,7 +213,7 @@ def get_top_15_datasets():
         # The top 15 get oversampled so in total they have same representation
         # as the other category.
         top_15.with_columns(
-            multiplier=len(test_other) // 15
+            multiplier=int(len(test_other) * top_15_mult)
         )
     ])
 
@@ -218,24 +227,18 @@ def get_top_15_datasets():
     )
 
 
-def get_category_datasets():
-    df = load_filtered_data()
-    train_all, validate_all, test_all = category_balanced_split(df)
-
-    # Build DataSets from the split data.
-    return (
-        GameOfLifeDataset(train_all),
-        GameOfLifeDataset(validate_all),
-        GameOfLifeDataset(test_all)
-    )
-
-
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
-    train_data, validate_data, test_data = get_category_datasets()
+    train_data, validate_data, test_data = get_split_dataset()
+    print('train:   ', len(train_data))
+    print('validate:', len(validate_data))
+    print('test:    ', len(test_data))
+    print('total:   ', len(train_data) + len(validate_data) + len(test_data))
+
     dataloader = DataLoader(train_data, batch_size=25, shuffle=True)
-    for batch in dataloader:
+    for _ in range(5):
+        batch = next(iter(dataloader))
         for i in range(25):
             plt.subplot(5, 5, i + 1)
             plt.imshow(batch['initial_state'][i].squeeze(), cmap='Greys')
