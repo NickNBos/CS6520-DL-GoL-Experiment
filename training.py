@@ -78,6 +78,7 @@ def train_model(model, train_data, validate_data):
             ).to(torch.float32).to(DEVICE)
             labels = encode_labels(batch).to(DEVICE)
 
+            optimizer.zero_grad()
             predictions = model.forward(initial_state)
             loss = criterion(predictions, labels)
             loss.backward()
