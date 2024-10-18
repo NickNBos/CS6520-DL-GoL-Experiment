@@ -142,9 +142,17 @@ def create_fizzlers(sizes = [6], goal = 500, tries = 5000):
     heights = [ len(pattern) for pattern in patterns ]
     widths = [ len(pattern[0]) for pattern in patterns ]
     
-    categories = [-1 for _ in patterns]
+    categories = [CATEGORY_NAMES.index('other')] * len(patterns)
     
-    data = {"category":categories,"pattern":patterns,"lifespan":lifespans,"size":sizes,"width":widths, "height":heights}
+    data = {
+        "category":categories,
+        "pattern":patterns,
+        "lifespan":lifespans,
+        "size":sizes,
+        "width":widths,
+        "height":heights,
+        "top_15":TOP_15_NAMES.index('other')
+    }
     
     # Janky workaround for ensuring catagory is the same dtype (i32)
     df = pl.DataFrame(data).with_columns(pl.col('category').cast(pl.Int32))
@@ -162,7 +170,7 @@ def import_all():
 
 def process(df):
     # First, remove all old fizzlers
-    df = df.filter(pl.col("category") != -1)
+    df = df.filter(pl.col("category") != CATEGORY_NAMES.index('other'))
     
     # Pre-render all the patterns from their apgcodes.
     decoder = Decoder()

@@ -61,20 +61,15 @@ if __name__ == '__main__':
 
     # Load and filter pattern data.
     df = load_catagolue_data().filter(
-        pl.col('category') == 2 # spaceships
-    ).with_columns(
-        extent=pl.max_horizontal('width', 'height')
+        pl.col('category') == 3 # fizzlers
     )
 
-    # Try animating patterns of various sizes to sanity check their behavior.
-    for max_extent in [8, 16, 24, 32]:
-        # Grab a random pattern in the current size bucket.
-        min_extent = max_extent - 8
+    for _ in range(5):
         pattern_data = df.filter(
-            (pl.col('extent') > min_extent) &
-            (pl.col('extent') < max_extent)
+            (pl.col('width') < 32) & (pl.col('height') < 32)
         ).sample()
-        print(pattern_data['apgcode'].item())
+        for column in pattern_data.columns:
+            print(column, pattern_data[column].item())
         pattern = np.array(pattern_data['pattern'].to_list()).squeeze()
 
         # Animate a simple scene containing this pattern.
