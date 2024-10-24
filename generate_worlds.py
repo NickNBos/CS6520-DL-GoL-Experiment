@@ -116,13 +116,16 @@ def generate_one():
             if row_index < LARGE_WORLD_SIZE:
                 col_index = 0
     
+    return data.tolist(), label.tolist()
+
+
+def visualize_world(data, label):
     plt.figure('Data', clear=True)
     plt.imshow(data, cmap="Greys")
     plt.figure('Labels', clear=True)
     for idx, channel in enumerate(label):
         plt.subplot(2,2,idx+1)
         plt.imshow(channel, cmap="Greys")
-    return data.tolist(), label.tolist()
     
 
 def generate_many(world_count = 1000):
