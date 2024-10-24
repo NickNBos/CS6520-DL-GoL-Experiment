@@ -44,6 +44,13 @@ def load_catagolue_data():
 
 pattern_df = load_catagolue_data()
 
+
+def load_world_df():
+    if OUTPUT_PATH.exists():
+        return pl.read_parquet(OUTPUT_PATH)
+    else:
+        print('No worlds file')
+        return None
     
 def generate_one():
     data = np.zeros([LARGE_WORLD_SIZE,LARGE_WORLD_SIZE])
@@ -152,4 +159,9 @@ def generate_many(world_count = 1000):
     
     
 if __name__ == '__main__':
-    generate_many()
+    # generate_many()
+    world_df = load_world_df()
+    
+    world_instance = world_df[np.random.randint(len(world_df))]
+    
+    visualize_world(world_instance['world pattern'][0].to_list(), world_instance['label'][0].to_list())
