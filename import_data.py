@@ -235,7 +235,7 @@ def regenerate_catagolue_data():
         # 0: Still-life
         # 1: Oscillator
         # 2: Spaceship
-        # -1: Fizzler
+        # 3: Fizzler
     # print(df['category'].value_counts())
     
     return df
@@ -249,4 +249,4 @@ def load_catagolue_data():
 
 
 if __name__ == '__main__':
-    regenerate_catagolue_data()
+    df = regenerate_catagolue_data()
