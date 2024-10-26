@@ -20,29 +20,24 @@ def encode_labels(batch):
     # concatente into a single vector.
     category = batch['category'].to(torch.int64)
     pattern_id = batch['pattern_id'].to(torch.int64)
-    period = batch['period'].nan_to_num(0).to(torch.int64)
     return torch.cat((
         one_hot(category, len(CATEGORY_NAMES)),
-        one_hot(pattern_id, len(TOP_15_NAMES)),
-        one_hot(period, MAX_PERIOD)),
+        one_hot(pattern_id, len(TOP_15_NAMES))),
         dim=2
     ).squeeze().to(torch.float32)
+
 
 def decode_labels(encoding):
     # Split up the output vector into three parts for the three
     # classification tasks.
-    category, encoding = (
+    assert encoding.shape[-1] == len(CATEGORY_NAMES) + len(TOP_15_NAMES)
+    category, pattern = (
         encoding[:, :len(CATEGORY_NAMES)],
-        encoding[:, len(CATEGORY_NAMES):])
-    pattern, period = (
-        encoding[:, :len(TOP_15_NAMES)],
-        encoding[:, len(TOP_15_NAMES):])
-    assert(period.shape[1] == MAX_PERIOD)
+        encoding[:, -len(TOP_15_NAMES):])
 
     # Find the predicted most likely category for each classification task.
     return (torch.argmax(category, dim=1),
-            torch.argmax(pattern, dim=1),
-            torch.argmax(period, dim=1))
+            torch.argmax(pattern, dim=1))
 
 def chart_loss_curves(train_loss, validate_loss, filename):
     plt.figure()
@@ -111,10 +106,8 @@ def test_model(model, test_data):
     # Setup for counting samples
     category_correct = {index: 0 for index in range(len(CATEGORY_NAMES))}
     pattern_id_correct = {index: 0 for index in range(len(TOP_15_NAMES))}
-    period_correct = {index: 0 for index in range(MAX_PERIOD)}
     category_count = {index: 0 for index in range(len(CATEGORY_NAMES))}
     pattern_id_count = {index: 0 for index in range(len(TOP_15_NAMES))}
-    period_count = {index: 0 for index in range(MAX_PERIOD)}
 
     # Go through the test data, run them through the model, and count up
     # the number of correct / total predictions.
@@ -128,8 +121,7 @@ def test_model(model, test_data):
         ).to(torch.float32).to(DEVICE)
         actual_category = batch['category']
         actual_pattern_id = batch['pattern_id']
-        actual_period = batch['period'].nan_to_num(0)
-        predicted_category, predicted_pattern_id, predicted_period = (
+        predicted_category, predicted_pattern_id = (
             decode_labels(model.forward(initial_state).cpu()))
 
         # Break down batch data by classification task and label.
@@ -142,10 +134,6 @@ def test_model(model, test_data):
             if predicted == actual:
                 pattern_id_correct[int(actual)] += 1
             pattern_id_count[int(actual)] += 1
-        for predicted, actual in zip(predicted_period, actual_period):
-            if predicted == actual:
-                period_correct[int(actual)] += 1
-            period_count[int(actual)] += 1
 
     # Print a summary of category predictions.
     category_accuracy = sum(category_correct.values()) / sum(category_count.values())
@@ -165,15 +153,5 @@ def test_model(model, test_data):
         accuracy = correct / count
         print(f'{pattern_name:>17}: {correct:>4} of {count:>4} ({100 * accuracy:.2f}%)')
 
-    # Print a summary of period predictions.
-    period_accuracy = sum(period_correct.values()) / sum(period_count.values())
-    print()
-    print(f'  Period accuracy: {100 * period_accuracy:.2f}%')
-    for period in range(MAX_PERIOD):
-        correct, count = period_correct[period], period_count[period]
-        if count == 0:
-            continue
-        accuracy = correct / count
-        period = 'n/a' if period < 1 else period
-        print(f'{period:>17}: {correct:>4} of {count:>4} ({100 * accuracy:.2f}%)')
+    return category_accuracy, pattern_id_accuracy
 

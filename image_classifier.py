@@ -4,7 +4,6 @@ import warnings
 import torch
 from torch import nn
 
-from constants import MAX_PERIOD
 from dataset import get_split_dataset
 from import_data import CATEGORY_NAMES, TOP_15_NAMES
 from training import train_model, test_model, chart_loss_curves
@@ -33,7 +32,7 @@ class CNNBlock(nn.Module):
 class ImageClassifier(nn.Module):
     def __init__(self):
         super(ImageClassifier, self).__init__()
-        output_size = len(CATEGORY_NAMES) + len(TOP_15_NAMES) + MAX_PERIOD
+        output_size = len(CATEGORY_NAMES) + len(TOP_15_NAMES)
         # Modeled after the "StandardNet" in HW 2
         self.net = nn.Sequential(
             CNNBlock(1, 32, 1),       # 32x32x1
