@@ -1,6 +1,3 @@
-from math import ceil
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -9,7 +6,8 @@ from torch.nn.functional import one_hot
 from torch.utils.data import DataLoader
 from tqdm import trange
 
-from constants import BATCH_SIZE, MAX_PERIOD, NUM_EPOCHS, WORLD_SIZE
+from constants import BATCH_SIZE, NUM_EPOCHS, WORLD_SIZE
+from evaluator import Evaluator
 from import_data import CATEGORY_NAMES, TOP_15_NAMES
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -56,6 +54,7 @@ def train_model(model, train_data, validate_data):
     model = model.to(DEVICE)
 
     # Prepare to optimize model parameters
+    # TODO: Investigate other loss criteria, such as soft F1 score.
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
@@ -63,6 +62,7 @@ def train_model(model, train_data, validate_data):
     progress = trange(NUM_EPOCHS * (len(train_data) + len(validate_data)))
     train_loss = np.zeros(NUM_EPOCHS)
     validate_loss = np.zeros(NUM_EPOCHS)
+    # TODO: Use an Evaluator to plot precision / recall over epochs
     for epoch in range(NUM_EPOCHS):
         # Run the training data for this epoch throught model, compute loss,
         # and adjust weights after each batch.
@@ -103,55 +103,22 @@ def train_model(model, train_data, validate_data):
 
 
 def test_model(model, test_data):
-    # Setup for counting samples
-    category_correct = {index: 0 for index in range(len(CATEGORY_NAMES))}
-    pattern_id_correct = {index: 0 for index in range(len(TOP_15_NAMES))}
-    category_count = {index: 0 for index in range(len(CATEGORY_NAMES))}
-    pattern_id_count = {index: 0 for index in range(len(TOP_15_NAMES))}
-
     # Go through the test data, run them through the model, and count up
     # the number of correct / total predictions.
-    loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
+    loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
     model = model.to(DEVICE)
+    evaluator = Evaluator()
     for batch in loader:
         # Grab the test data and predicted labels.
         batch_size = batch['initial_state'].shape[0]
         initial_state = batch['initial_state'].reshape(
             (batch_size, 1, WORLD_SIZE, WORLD_SIZE)
         ).to(torch.float32).to(DEVICE)
-        actual_category = batch['category']
-        actual_pattern_id = batch['pattern_id']
-        predicted_category, predicted_pattern_id = (
+        true_category = batch['category']
+        true_pattern_id = batch['pattern_id']
+        pred_category, pred_pattern_id = (
             decode_labels(model.forward(initial_state).cpu()))
-
-        # Break down batch data by classification task and label.
-        # TODO: Maybe collect some samples of failures to debug our models?
-        for predicted, actual in zip(predicted_category, actual_category):
-            if predicted == actual:
-                category_correct[int(actual)] += 1
-            category_count[int(actual)] += 1
-        for predicted, actual in zip(predicted_pattern_id, actual_pattern_id):
-            if predicted == actual:
-                pattern_id_correct[int(actual)] += 1
-            pattern_id_count[int(actual)] += 1
-
-    # Print a summary of category predictions.
-    category_accuracy = sum(category_correct.values()) / sum(category_count.values())
-    print()
-    print(f'Category accuracy: {100 * category_accuracy:.2f}%')
-    for cat_value, cat_name in enumerate(CATEGORY_NAMES):
-        correct, count = category_correct[cat_value], category_count[cat_value]
-        accuracy = correct / count
-        print(f'{cat_name:>17}: {correct:>4} of {count:>4} ({100 * accuracy:.2f}%)')
-
-    # Print a summary of recognizing the top 15.
-    pattern_id_accuracy = sum(pattern_id_correct.values()) / sum(pattern_id_count.values())
-    print()
-    print(f'  Top-15 accuracy: {100 * pattern_id_accuracy:.2f}%')
-    for pattern_id, pattern_name in enumerate(TOP_15_NAMES):
-        correct, count = pattern_id_correct[pattern_id], pattern_id_count[pattern_id]
-        accuracy = correct / count
-        print(f'{pattern_name:>17}: {correct:>4} of {count:>4} ({100 * accuracy:.2f}%)')
-
-    return category_accuracy, pattern_id_accuracy
+        evaluator.ingest_batch(
+            true_category, pred_category, true_pattern_id, pred_pattern_id)
+    evaluator.print_summary()
 
