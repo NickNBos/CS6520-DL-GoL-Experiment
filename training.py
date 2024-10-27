@@ -57,10 +57,10 @@ def train_model(model, train_data, validate_data, metrics_tracker):
             for batch in validate_loader:
                 batch_size, initial_state, true_category, true_pattern_id = \
                         unpack_batch(batch)
-                pred_category, pred_pattern_id = model.forward(initial_state)
+                pred_category_oh, pred_pattern_id_oh = model.forward(initial_state)
                 loss = metrics_tracker.score_batch(
-                    true_category, pred_category,
-                    true_pattern_id, pred_pattern_id, 'validate', epoch)
+                    true_category, pred_category_oh,
+                    true_pattern_id, pred_pattern_id_oh, 'validate', epoch)
                 progress.update(batch_size)
 
 

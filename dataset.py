@@ -164,7 +164,7 @@ def category_balanced_split(df, dataset_size=DATASET_SIZE):
     return (train_all, validate_all, test_all)
 
 
-def get_split_dataset():
+def get_split_dataset(top_15_frac=TOP_15_FRAC):
     df = load_filtered_data()
     other = TOP_15_NAMES.index('other')
 
@@ -176,9 +176,9 @@ def get_split_dataset():
 
 
     # Split the non-top-15 patterns into train, validate, and test data
-    # balanced by category. The top 15 patterns will make up TOP_15_FRAC of the
+    # balanced by category. The top 15 patterns will make up top_15_frac of the
     # total dataset, and the other patterns will make up the rest.
-    other_target_size = int(DATASET_SIZE * (1 - TOP_15_FRAC))
+    other_target_size = int(DATASET_SIZE * (1 - top_15_frac))
     train_other, validate_other, test_other = category_balanced_split(
         others, other_target_size)
 
@@ -191,7 +191,7 @@ def get_split_dataset():
     # it's very unlikely / rare that the same initial_state will appear in both
     # train and test. This might cause the model to "memorize" the top_15
     # patterns, but that is actually desirable for this task.
-    top_15_mult = TOP_15_FRAC / (1 - TOP_15_FRAC) / 15
+    top_15_mult = top_15_frac / (1 - top_15_frac) / 15
     train_all = pl.concat([
         train_other,
         # The top 15 get oversampled so in total they have same representation

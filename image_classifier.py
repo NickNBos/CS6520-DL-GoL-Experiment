@@ -1,6 +1,7 @@
 from pathlib import Path
 import warnings
 
+import polars as pl
 import torch
 from torch import nn
 
@@ -47,37 +48,99 @@ class ImageClassifier(nn.Module):
             CNNBlock(1024, 1024, 1),  # 2x2x1024
             nn.AvgPool2d(2),          # 1x1x1024
             nn.Flatten(),
-            nn.Linear(1024, 1024)
+            nn.Linear(1024, 1024),
+            nn.ReLU()
         )
-        self.category_head = nn.Linear(1024, len(CATEGORY_NAMES))
-        self.top_15_head = nn.Linear(1024, len(TOP_15_NAMES))
+        self.category_head = nn.Sequential(
+            nn.Linear(1024, len(CATEGORY_NAMES)),
+            nn.Sigmoid())
+        self.top_15_head = nn.Sequential(
+            nn.Linear(1024, len(TOP_15_NAMES)),
+            nn.Sigmoid())
 
     def forward(self, x):
         features = self.backbone(x)
         return self.category_head(features), self.top_15_head(features)
 
 
+def hp_loss_func():
+    from metrics import bce, soft_f1_score
+
+    loss_funcs = {
+        'bce': bce,
+        'soft_f1_score': soft_f1_score,
+    }
+    for loss_name, loss_func in loss_funcs.items():
+        title = f'loss = {loss_name}'
+        path = Path('output/image_classifier/hp_loss_func')
+        path.mkdir(exist_ok=True)
+
+        data_filename = path / f'train_log_{loss_name}.parquet'
+        if data_filename.exists():
+            print('Regenerating outputs from cached data...')
+            metrics_tracker = MetricsTracker(pl.read_parquet(data_filename))
+        else:
+            print(f'Training with {loss_name}...')
+            model = ImageClassifier()
+            metrics_tracker = MetricsTracker(loss_func)
+            train_data, validate_data, _ = get_split_dataset()
+            train_model(model, train_data, validate_data, metrics_tracker)
+            metrics_tracker.get_summary().write_parquet(path / data_filename)
+
+        metrics_tracker.summarize_training(path, loss_name, title)
+
+
+def hp_task_mix():
+    top_15_fracs = [0.1, 0.3, 0.5, 0.7, 0.9]
+    for top_15_frac in top_15_fracs:
+        title = f'top 15 % = {int(100 * top_15_frac)}'
+        path = Path('output/image_classifier/hp_task_mix')
+        path.mkdir(exist_ok=True)
+
+        data_filename = path / f'train_log_{top_15_frac}.parquet'
+        if data_filename.exists():
+            print('Regenerating outputs from cached data...')
+            metrics_tracker = MetricsTracker(pl.read_parquet(data_filename))
+        else:
+            print(f'Training with {int(100*top_15_frac)}% from top 15...')
+            model = ImageClassifier()
+            metrics_tracker = MetricsTracker()
+            train_data, validate_data, _ = get_split_dataset(top_15_frac)
+            train_model(model, train_data, validate_data, metrics_tracker)
+            metrics_tracker.get_summary().write_parquet(data_filename)
+
+        metrics_tracker.summarize_training(path, str(top_15_frac), title)
+
+
+def tune_hyperparams():
+    print('Comparing loss functions...')
+    hp_loss_func()
+
+    print('Comparing different task mixes...')
+    hp_task_mix()
+
+
 if __name__ == '__main__':
-    path = Path('output/image_classifier')
-    path.mkdir(exist_ok=True)
-    model_filename = path / 'model.pt'
+    tune_hyperparams()
+    #path = Path('output/image_classifier')
+    #path.mkdir(exist_ok=True)
+    #model_filename = path / 'model.pt'
 
-    model = ImageClassifier()
-    metrics_tracker = MetricsTracker()
-    train_data, validate_data, test_data = get_split_dataset()
+    #model = ImageClassifier()
+    #metrics_tracker = MetricsTracker()
+    #train_data, validate_data, test_data = get_split_dataset()
 
-    if model_filename.exists():
-        print('Using pre-trained model weights')
-        model.load_state_dict(torch.load(model_filename, weights_only=True))
-    else:
-        print('Training model...')
-        train_model(model, train_data, validate_data, metrics_tracker)
-        torch.save(model.state_dict(), model_filename)
-        metrics_tracker.get_summary().write_parquet(path / 'train_log.parquet')
-        metrics_tracker.chart_loss_curves(path / 'loss.png')
-        metrics_tracker.chart_pr_trajectory(path / 'pr_trajectory.png')
+    #if model_filename.exists():
+    #    print('Using pre-trained model weights')
+    #    model.load_state_dict(torch.load(model_filename, weights_only=True))
+    #else:
+    #    print('Training model...')
+    #    train_model(model, train_data, validate_data, metrics_tracker)
+    #    torch.save(model.state_dict(), model_filename)
+    #    metrics_tracker.get_summary().write_parquet(path / 'train_log.parquet')
+    #    metrics_tracker.summarize_training(path)
 
-    print('Evaluating on test dataset...')
-    metrics_tracker.reset()
-    test_model(model, test_data, metrics_tracker)
-    metrics_tracker.print_summary()
+    #print('Evaluating on test dataset...')
+    #metrics_tracker.reset()
+    #test_model(model, test_data, metrics_tracker)
+    #metrics_tracker.print_summary('test')

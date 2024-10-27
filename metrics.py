@@ -2,53 +2,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 import torch
-from torch.nn import BCEWithLogitsLoss
+from torch.nn import BCELoss
 from torch.nn.functional import one_hot
 
 from constants import NUM_EPOCHS
 from import_data import CATEGORY_NAMES, TOP_15_NAMES
-
-
-def chart_loss_curves(df, filename):
-    df = df.group_by(
-        'mode', 'epoch', maintain_order=True
-    ).agg(
-        pl.col('loss').mean()
-    )
-    train_loss = df.filter(pl.col('mode') == 'train')['loss']
-    validate_loss = df.filter(pl.col('mode') == 'validate')['loss']
-
-    plt.figure()
-    plt.plot(np.arange(NUM_EPOCHS), train_loss, label='training loss')
-    plt.plot(np.arange(NUM_EPOCHS), validate_loss, label='validation loss')
-    plt.gca().set(xlabel='Epochs', ylabel='Loss')
-    plt.legend()
-    plt.savefig(filename, dpi=600)
-
-
-def chart_pr_trajectory(df, filename):
-    df = df.group_by(
-        'mode', 'epoch', maintain_order=True
-    ).agg(
-        pl.col('precision').mean(),
-        pl.col('recall').mean()
-    ).filter(
-        pl.col('mode') == 'train'
-    )
-    precision = df['precision']
-    recall = df['recall']
-    plt.figure()
-    plt.gca().set_xlim([0.0, 1.0])
-    plt.gca().set_ylim([0.0, 1.0])
-    plt.gca().set(xlabel='Precision', ylabel='Recall')
-    prev_x, prev_y = precision[0], recall[0]
-    for p, r in zip(precision[1:], recall[1:]):
-        dx, dy = p - prev_x, r - prev_y
-        plt.arrow(prev_x, prev_y, dx, dy)
-        prev_x += dx
-        prev_y += dy
-    plt.savefig(filename, dpi=600)
-
 
 def soft_f1_score(true_category_oh, pred_category_oh,
                   true_pattern_id_oh, pred_pattern_id_oh):
@@ -72,17 +30,18 @@ def soft_f1_score(true_category_oh, pred_category_oh,
     return 1.0 - f1_score
 
 
-def bce_with_logits(true_category_oh, pred_category_oh,
-                    true_pattern_id_oh, pred_pattern_id_oh):
+def bce(true_category_oh, pred_category_oh,
+        true_pattern_id_oh, pred_pattern_id_oh):
     labels = torch.cat((true_category_oh, true_pattern_id_oh), dim=1)
     predictions = torch.cat((pred_category_oh, pred_pattern_id_oh), dim=1)
-    return BCEWithLogitsLoss()(predictions, labels)
+    return BCELoss()(predictions, labels)
 
 
 class MetricsTracker():
-    def __init__(self, loss_func=bce_with_logits):
+    def __init__(self, summary=None, loss_func=soft_f1_score):
         self.loss_func = loss_func
-        self.reset()
+        self.frames = []
+        self.summary = summary
 
     def reset(self):
         self.frames = []
@@ -174,42 +133,109 @@ class MetricsTracker():
             )
         return self.summary
 
-    def print_summary(self):
-        # If there's more than one epoch, just look at the last one.
+    def print_summary(self, mode, file=None):
         df = self.get_summary().filter(
-            (pl.col('epoch').is_null()) | (pl.col('epoch') == NUM_EPOCHS - 1)
+            # If there's more than one epoch, just look at the last one.
+            (pl.col('epoch').is_null()) | (pl.col('epoch') == NUM_EPOCHS - 1) &
+            # Only look at data from the this mode (train / validate / test)
+            (pl.col('mode') == mode)
         )
         category_data = df.filter(
-            pl.col('task') == 'category'
+            (pl.col('task') == 'category')
         )
         print('Category macro F1 score:',
-              f'{category_data["f1_score"].mean():.2f}')
-        print('   Category  | Precision | Recall | F1 Score')
-        print('-------------+-----------+--------+---------')
+              f'{category_data["f1_score"].mean():.2f}', file=file)
+        print('   Category  | Precision | Recall | F1 Score', file=file)
+        print('-------------+-----------+--------+---------', file=file)
         category_data.group_by('label')
         for label in CATEGORY_NAMES:
             row_data = category_data.filter(pl.col('label') == label)
             print(f'{label:>12} | '
                   f'{row_data["precision"].item():^9.2f} | '
                   f'{row_data["recall"].item():^6.2f} | '
-                  f'{row_data["f1_score"].item():^8.2f}')
-        print()
+                  f'{row_data["f1_score"].item():^8.2f}', file=file)
+        print(file=file)
 
         top_15_data = df.filter(pl.col('task') == 'top_15')
         print('Top-15 macro F1 score:',
-              f'{top_15_data["f1_score"].mean():.2f}')
-        print('Pattern Name | Precision | Recall | F1 Score')
-        print('-------------+-----------+--------+---------')
+              f'{top_15_data["f1_score"].mean():.2f}', file=file)
+        print('Pattern Name | Precision | Recall | F1 Score', file=file)
+        print('-------------+-----------+--------+---------', file=file)
         for label in TOP_15_NAMES:
             row_data = top_15_data.filter(pl.col('label') == label)
             print(f'{label:>12} | '
                   f'{row_data["precision"].item():^9.2f} | '
                   f'{row_data["recall"].item():^6.2f} | '
-                  f'{row_data["f1_score"].item():^8.2f}')
-        print()
+                  f'{row_data["f1_score"].item():^8.2f}', file=file)
+        print(file=file)
 
-    def chart_loss_curves(self, filename):
-        chart_loss_curves(self.get_summary(), filename)
+    def chart_loss_curves(self, title, filename):
+        df = self.get_summary().group_by(
+            'mode', 'epoch', maintain_order=True
+        ).agg(
+            pl.col('loss').mean()
+        )
+        train_loss = df.filter(pl.col('mode') == 'train')['loss']
+        validate_loss = df.filter(pl.col('mode') == 'validate')['loss']
 
-    def chart_pr_trajectory(self, filename):
-        chart_pr_trajectory(self.get_summary(), filename)
+        plt.figure()
+        plt.suptitle(title)
+        plt.gca().set_ylim([0.0, 1.0])
+        plt.plot(np.arange(NUM_EPOCHS), train_loss, label='training loss')
+        plt.plot(np.arange(NUM_EPOCHS), validate_loss, label='validation loss')
+        plt.gca().set(xlabel='Epochs', ylabel='Loss')
+        plt.legend()
+        plt.savefig(filename, dpi=600)
+        plt.close()
+
+    def chart_f1_score(self, title, filename):
+        df = self.get_summary().group_by(
+            'task', 'epoch', maintain_order=True
+        ).agg(
+            pl.col('f1_score').mean()
+        )
+        category_f1 = df.filter(pl.col('task') == 'category')['f1_score']
+        top_15_f1 = df.filter(pl.col('task') == 'top_15')['f1_score']
+
+        plt.figure()
+        plt.suptitle(title)
+        plt.gca().set_ylim([0.0, 1.0])
+        plt.plot(np.arange(NUM_EPOCHS), category_f1, label='category f1_score')
+        plt.plot(np.arange(NUM_EPOCHS), top_15_f1, label='top_15 f1_score')
+        plt.gca().set(xlabel='Epochs', ylabel='F1 Score')
+        plt.legend()
+        plt.savefig(filename, dpi=600)
+        plt.close()
+
+    def chart_pr_trajectory(self, title, filename):
+        df = self.get_summary().group_by(
+            'mode', 'epoch', maintain_order=True
+        ).agg(
+            pl.col('precision').mean(),
+            pl.col('recall').mean()
+        ).filter(
+            pl.col('mode') == 'train'
+        )
+        precision = df['precision']
+        recall = df['recall']
+        plt.figure()
+        plt.suptitle(title)
+        plt.gca().set_xlim([0.0, 1.0])
+        plt.gca().set_ylim([0.0, 1.0])
+        plt.gca().set(xlabel='Precision', ylabel='Recall')
+        plt.scatter(precision, recall, c=np.arange(NUM_EPOCHS))
+        plt.colorbar(label='Epoch')
+        plt.savefig(filename, dpi=600)
+        plt.close()
+
+    def summarize_training(self, path, suffix='', title=None):
+        if len(suffix) > 0:
+            suffix = f'_{suffix}'
+        self.chart_loss_curves(
+            title, path / f'loss{suffix}.png')
+        self.chart_pr_trajectory(
+            title, path / f'pr_trajectory{suffix}.png')
+        self.chart_f1_score(
+            title, path / f'f1_score{suffix}.png')
+        with open(path / f'summary{suffix}.txt', 'w') as file:
+            self.print_summary('train', file)
