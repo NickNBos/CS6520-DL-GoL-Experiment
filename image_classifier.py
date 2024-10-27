@@ -6,7 +6,8 @@ from torch import nn
 
 from dataset import get_split_dataset
 from import_data import CATEGORY_NAMES, TOP_15_NAMES
-from training import train_model, test_model, chart_loss_curves
+from metrics import MetricsTracker
+from training import train_model, test_model
 
 # Torch fires this warning on every call to load_state_dict()
 warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
@@ -32,9 +33,8 @@ class CNNBlock(nn.Module):
 class ImageClassifier(nn.Module):
     def __init__(self):
         super(ImageClassifier, self).__init__()
-        output_size = len(CATEGORY_NAMES) + len(TOP_15_NAMES)
         # Modeled after the "StandardNet" in HW 2
-        self.net = nn.Sequential(
+        self.backbone = nn.Sequential(
             CNNBlock(1, 32, 1),       # 32x32x1
             CNNBlock(32, 64, 1),      # 32x32x32
             CNNBlock(64, 128, 2),     # 32x32x64
@@ -47,11 +47,14 @@ class ImageClassifier(nn.Module):
             CNNBlock(1024, 1024, 1),  # 2x2x1024
             nn.AvgPool2d(2),          # 1x1x1024
             nn.Flatten(),
-            nn.Linear(1024, output_size)
+            nn.Linear(1024, 1024)
         )
+        self.category_head = nn.Linear(1024, len(CATEGORY_NAMES))
+        self.top_15_head = nn.Linear(1024, len(TOP_15_NAMES))
 
     def forward(self, x):
-        return self.net(x)
+        features = self.backbone(x)
+        return self.category_head(features), self.top_15_head(features)
 
 
 if __name__ == '__main__':
@@ -60,6 +63,7 @@ if __name__ == '__main__':
     model_filename = path / 'model.pt'
 
     model = ImageClassifier()
+    metrics_tracker = MetricsTracker()
     train_data, validate_data, test_data = get_split_dataset()
 
     if model_filename.exists():
@@ -67,9 +71,13 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(model_filename, weights_only=True))
     else:
         print('Training model...')
-        chart_loss_curves(
-            *train_model(model, train_data, validate_data), path / 'loss.png')
+        train_model(model, train_data, validate_data, metrics_tracker)
         torch.save(model.state_dict(), model_filename)
+        metrics_tracker.get_summary().write_parquet(path / 'train_log.parquet')
+        metrics_tracker.chart_loss_curves(path / 'loss.png')
+        metrics_tracker.chart_pr_trajectory(path / 'pr_trajectory.png')
 
     print('Evaluating on test dataset...')
-    test_model(model, test_data)
+    metrics_tracker.reset()
+    test_model(model, test_data, metrics_tracker)
+    metrics_tracker.print_summary()
