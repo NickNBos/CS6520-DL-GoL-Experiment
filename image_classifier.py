@@ -82,10 +82,10 @@ def hp_loss_func():
         else:
             print(f'Training with {loss_name}...')
             model = ImageClassifier()
-            metrics_tracker = MetricsTracker(loss_func)
+            metrics_tracker = MetricsTracker(loss_func=loss_func)
             train_data, validate_data, _ = get_split_dataset()
             train_model(model, train_data, validate_data, metrics_tracker)
-            metrics_tracker.get_summary().write_parquet(path / data_filename)
+            metrics_tracker.get_summary().write_parquet(data_filename)
 
         metrics_tracker.summarize_training(path, loss_name, title)
 
