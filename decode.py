@@ -166,7 +166,7 @@ if __name__ == '__main__':
         
         print(resized_example)
         plt.figure(example, clear=True)
-        decoder.visualize(clipped_example)
+        decoder.visualize(decoder.standard_one_pad(clipped_example))
         # decoder.visualize(resized_example)
         plt.show()
         

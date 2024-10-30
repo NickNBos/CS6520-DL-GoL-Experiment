@@ -130,11 +130,22 @@ def visualize_world(data, label):
     plt.figure('Data', clear=True)
     plt.imshow(data, cmap="Greys")
     plt.figure('Labels', clear=True)
-    for idx, channel in enumerate(label):
-        plt.subplot(2,2,idx+1)
-        plt.imshow(channel, cmap="Greys")
     
-
+    label = np.array(label)
+    colors = ['Reds','Greens','Blues', 'Purples']
+    combined_label = np.zeros(label.shape[1:])
+    for idx, channel in enumerate(label):
+        color = colors[idx]
+        combined_label += 2*(idx+1)*np.array(channel)
+        # plt.subplot(2,2,idx+1)
+        plt.imshow(channel, cmap=color, alpha = 0.3)
+    
+    plt.figure('combo', clear=True)
+    plt.imshow(combined_label, cmap='YlGnBu', alpha = 0.9)
+    plt.imshow(data, cmap="Greys", alpha=0.5)
+    
+    
+    
 def generate_many(world_count = 1000):
     if pattern_df is None:
         print('No catalogue of patterns to build from.')
