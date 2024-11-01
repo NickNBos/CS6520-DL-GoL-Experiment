@@ -196,7 +196,6 @@ class MetricsTracker():
 
         plt.figure()
         plt.suptitle(title)
-        plt.gca().set_ylim([0.0, 1.0])
         plt.plot(np.arange(NUM_EPOCHS), train_loss, label='training loss')
         plt.plot(np.arange(NUM_EPOCHS), validate_loss, label='validation loss')
         plt.gca().set(xlabel='Epochs', ylabel='Loss')
