@@ -54,7 +54,7 @@ def focal(true_category_oh, pred_category_oh,
 
 
 class MetricsTracker():
-    def __init__(self, summary=None, loss_func=soft_f1_score):
+    def __init__(self, summary=None, loss_func=focal):
         self.loss_func = loss_func
         self.frames = []
         self.summary = summary
@@ -196,7 +196,6 @@ class MetricsTracker():
 
         plt.figure()
         plt.suptitle(title)
-        plt.gca().set_ylim([0.0, 1.0])
         plt.plot(np.arange(NUM_EPOCHS), train_loss, label='training loss')
         plt.plot(np.arange(NUM_EPOCHS), validate_loss, label='validation loss')
         plt.gca().set(xlabel='Epochs', ylabel='Loss')
