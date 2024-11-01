@@ -27,8 +27,6 @@ def train_model(model, train_data, validate_data, metrics_tracker):
     model = model.to(DEVICE)
 
     # Prepare to optimize model parameters
-    # TODO: Investigate other loss criteria, such as soft F1 score.
-    criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     # Train for the specified number of epochs
