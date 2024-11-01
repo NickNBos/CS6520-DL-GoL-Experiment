@@ -73,7 +73,7 @@ def hp_loss_func():
     for loss_name, loss_func in loss_funcs.items():
         title = f'loss = {loss_name}'
         path = Path('output/image_classifier/hp_loss_func')
-        path.mkdir(exist_ok=True)
+        path.mkdir(exist_ok=True, parents=True)
 
         data_filename = path / f'train_log_{loss_name}.parquet'
         if data_filename.exists():
@@ -95,7 +95,7 @@ def hp_task_mix():
     for top_15_frac in top_15_fracs:
         title = f'top 15 % = {int(100 * top_15_frac)}'
         path = Path('output/image_classifier/hp_task_mix')
-        path.mkdir(exist_ok=True)
+        path.mkdir(exist_ok=True, parents=True)
 
         data_filename = path / f'train_log_{top_15_frac}.parquet'
         if data_filename.exists():
@@ -123,7 +123,7 @@ def tune_hyperparams():
 if __name__ == '__main__':
     tune_hyperparams()
     #path = Path('output/image_classifier')
-    #path.mkdir(exist_ok=True)
+    #path.mkdir(exist_ok=True, parents=True)
     #model_filename = path / 'model.pt'
 
     #model = ImageClassifier()
