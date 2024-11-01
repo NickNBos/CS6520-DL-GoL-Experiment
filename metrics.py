@@ -2,8 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 import torch
-from torch.nn import BCELoss
-from torch.nn.functional import one_hot
+from torch.nn import BCEWithLogitsLoss
+from torch.nn.functional import one_hot, softmax
+from torchvision.ops.focal_loss import sigmoid_focal_loss
 
 from constants import NUM_EPOCHS
 from import_data import CATEGORY_NAMES, TOP_15_NAMES
@@ -13,18 +14,26 @@ def soft_f1_score(true_category_oh, pred_category_oh,
     # To use F1 Score as a loss function, we need to make it differentiable.
     # Instead of treating category assignments as binary, instead treat a
     # predicted value between 0.0 and 1.0 as partially correct and incorrect.
-    true_positives = (
-        (true_category_oh * pred_category_oh).sum() +
-        (true_pattern_id_oh * true_pattern_id_oh).sum())
-    false_positives = (
-        ((1 - true_category_oh) * pred_category_oh).sum() +
-        ((1 - true_pattern_id_oh) * pred_pattern_id_oh).sum())
-    false_negatives = (
-        (true_category_oh * (1 - pred_category_oh)).sum() +
-        (true_pattern_id_oh * (1 - pred_pattern_id_oh)).sum())
-    precision = true_positives / (true_positives + false_positives + 1e-6)
-    recall = true_positives / (true_positives + false_negatives + 1e-6)
-    f1_score = (2 * precision * recall) / (precision + recall + 1e-6)
+    def single_soft_f1_score(true, pred):
+        true_positives = (true * pred).sum()
+        false_positives = ((1 - true) * pred).sum()
+        false_negitives = (true * (1 - pred)).sum()
+        precision = true_positives / (true_positives + false_positives + 1e-6)
+        recall =   true_positives / (true_positives + false_negitives + 1e-6)
+        f1_score = (2 * precision * recall) / (precision + recall + 1e-6)
+        return f1_score
+
+    # Make sure that predictions sum to 1.0 so that picking the true category
+    # with probability P counts as P% true positive and (1-P)% false negative.
+    pred_category_oh = softmax(pred_category_oh, dim=1)
+    pred_pattern_id_oh = softmax(pred_pattern_id_oh, dim=1)
+
+    # Wikipedia says that it's better to compute a macro F1 score by averaging
+    # per task F1 scors, rather than averaging per task precision / recall and
+    # computing a joint F1 score. Here we weight the two tasks equally.
+    category_f1 = single_soft_f1_score(true_category_oh, pred_category_oh)
+    pattern_id_f1 = single_soft_f1_score(true_pattern_id_oh, pred_pattern_id_oh)
+    f1_score = (category_f1 + pattern_id_f1) / 2
 
     # We minimize loss, but want to maximize F1 Score.
     return 1.0 - f1_score
@@ -34,7 +43,14 @@ def bce(true_category_oh, pred_category_oh,
         true_pattern_id_oh, pred_pattern_id_oh):
     labels = torch.cat((true_category_oh, true_pattern_id_oh), dim=1)
     predictions = torch.cat((pred_category_oh, pred_pattern_id_oh), dim=1)
-    return BCELoss()(predictions, labels)
+    return BCEWithLogitsLoss()(predictions, labels)
+
+
+def focal(true_category_oh, pred_category_oh,
+          true_pattern_id_oh, pred_pattern_id_oh):
+    labels = torch.cat((true_category_oh, true_pattern_id_oh), dim=1)
+    predictions = torch.cat((pred_category_oh, pred_pattern_id_oh), dim=1)
+    return sigmoid_focal_loss(predictions, labels, reduction='sum')
 
 
 class MetricsTracker():

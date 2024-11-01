@@ -52,11 +52,9 @@ class ImageClassifier(nn.Module):
             nn.ReLU()
         )
         self.category_head = nn.Sequential(
-            nn.Linear(1024, len(CATEGORY_NAMES)),
-            nn.Sigmoid())
+            nn.Linear(1024, len(CATEGORY_NAMES)))
         self.top_15_head = nn.Sequential(
-            nn.Linear(1024, len(TOP_15_NAMES)),
-            nn.Sigmoid())
+            nn.Linear(1024, len(TOP_15_NAMES)))
 
     def forward(self, x):
         features = self.backbone(x)
@@ -64,9 +62,10 @@ class ImageClassifier(nn.Module):
 
 
 def hp_loss_func():
-    from metrics import bce, soft_f1_score
+    from metrics import bce, focal, soft_f1_score
 
     loss_funcs = {
+        'focal': focal,
         'bce': bce,
         'soft_f1_score': soft_f1_score,
     }
@@ -116,8 +115,8 @@ def tune_hyperparams():
     print('Comparing loss functions...')
     hp_loss_func()
 
-    print('Comparing different task mixes...')
-    hp_task_mix()
+    # print('Comparing different task mixes...')
+    # hp_task_mix()
 
 
 if __name__ == '__main__':
