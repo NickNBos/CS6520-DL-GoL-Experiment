@@ -65,19 +65,26 @@ class MetricsTracker():
 
     def score_batch(self, true_category, pred_category_oh,
                     true_pattern_id, pred_pattern_id_oh, mode, epoch=None):
+        # Compute canonical forms for the category and pattern data, as raw
+        # values and as one-hot encodings.
+        true_category = true_category.squeeze()
+        true_pattern_id = true_pattern_id.squeeze()
         true_category_oh = one_hot(
             true_category.to(torch.int64), len(CATEGORY_NAMES)
-        ).squeeze().to(torch.float32)
+        ).to(torch.float32)
         true_pattern_id_oh = one_hot(
             true_pattern_id.to(torch.int64), len(TOP_15_NAMES)
-        ).squeeze().to(torch.float32)
+        ).to(torch.float32)
 
+        pred_category = torch.argmax(pred_category_oh, dim=1).squeeze()
+        pred_pattern_id = torch.argmax(pred_pattern_id_oh, dim=1).squeeze()
+
+        # Compute loss.
         loss = self.loss_func(
             true_category_oh, pred_category_oh,
             true_pattern_id_oh, pred_pattern_id_oh)
 
-        pred_category = torch.argmax(pred_category_oh, dim=1)
-        pred_pattern_id = torch.argmax(pred_pattern_id_oh, dim=1)
+        # Calculate and store aggregate statistics per class.
         for cat_id, cat_name in enumerate(CATEGORY_NAMES):
             self.frames.append(pl.DataFrame({
                 'task': 'category',
