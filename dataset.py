@@ -10,7 +10,7 @@ from simulate import simulate_one
 SPLIT_RATIO = (70, 15, 15) # train, validate, test
 
 # Overrepresent the top 15 patterns to this fraction of the total dataset.
-TOP_15_FRAC = 0.1
+TOP_15_FRAC = 0.5
 
 
 class GameOfLifeDataset(Dataset):
@@ -237,7 +237,7 @@ if __name__ == '__main__':
     print('total:   ', len(train_data) + len(validate_data) + len(test_data))
 
     dataloader = DataLoader(train_data, batch_size=25, shuffle=True)
-    for _ in range(5):
+    for _ in range(1):
         batch = next(iter(dataloader))
         for i in range(25):
             plt.subplot(5, 5, i + 1)

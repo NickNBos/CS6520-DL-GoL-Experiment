@@ -2,7 +2,7 @@
 WORLD_SIZE = 32
 
 # The longest period that we expect this system to detect.
-MAX_PERIOD = 16
+MAX_PERIOD = 5
 
 # How long each simulation video to analyze will be.
 VIDEO_LEN = MAX_PERIOD * 3
