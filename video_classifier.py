@@ -2,9 +2,8 @@ from pathlib import Path
 import warnings
 
 import polars as pl
-import torch
 from torch import nn
-from constants import MAX_PERIOD, VIDEO_LEN, WORLD_SIZE
+from constants import MAX_PERIOD, VIDEO_LEN
 
 from dataset import get_split_dataset
 from image_classifier import CNNBlock
@@ -15,19 +14,6 @@ from training import train_model, test_model
 
 # Torch fires this warning on every call to load_state_dict()
 warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
-
-class DepthwiseCNNBlock(nn.Module):
-    def __init__(self, in_depth, out_depth):
-        super(DepthwiseCNNBlock, self).__init__()
-        self.block = nn.Sequential(
-            nn.Conv2d(in_channels=in_depth, out_channels=out_depth,
-                      kernel_size=1, padding=1, bias=False),
-            nn.BatchNorm2d(out_depth),
-            nn.ReLU()
-        )
-
-    def forward(self, x):
-        return self.block(x)
 
 class Conv2Plus1d(nn.Module):
     def __init__(self, in_depth, out_depth):
@@ -63,6 +49,13 @@ class VideoClassifier(nn.Module):
         self.model_name = model_name
         self.video_len = video_len
 
+        # A few different RNN variants to try, all with the same API.
+        recurrent_layer_types = {
+            'rnn': nn.RNN,
+            'lstm': nn.LSTM,
+            'gru': nn.GRU
+        }
+
         # TODO: Implement different temporal models...
         if model_name == 'cnn':
             # This is a 2+1D variant of the "Minimal" network from image_classifier.py
@@ -75,7 +68,7 @@ class VideoClassifier(nn.Module):
                 nn.Linear(video_len * 8 * 8 * 64, 1024),
                 nn.ReLU()
             )
-        elif model_name == 'gru':
+        elif model_name in recurrent_layer_types.keys():
             # This is just the "Minimal" network from image_classifier.py.
             # We'll do a forward pass of this on each frame of the video...
             self.backbone = nn.Sequential(
@@ -89,7 +82,8 @@ class VideoClassifier(nn.Module):
             )
             # ... then we'll pass the features through the recurrent part of
             # the network for temporal integration.
-            self.recurrent = nn.GRU(1024, 1024, num_layers, batch_first=True)
+            self.recurrent = recurrent_layer_types['model_name'](
+                1024, 1024, num_layers, batch_first=True)
 
         # Reuse the classification heads from the image model (they will get
         # retrained from scratch).
