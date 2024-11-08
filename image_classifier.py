@@ -39,7 +39,7 @@ class CNNBlock(nn.Module):
 #  - Minimal CNN
 #  - With and without coordinates embedded
 class ImageClassifier(nn.Module):
-    def __init__(self, model_name='standard', embed_coords=False):
+    def __init__(self, model_name='minimal', embed_coords=False):
         super(ImageClassifier, self).__init__()
         self.model_name = model_name
         self.embed_coords = embed_coords

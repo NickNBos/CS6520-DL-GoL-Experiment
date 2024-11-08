@@ -18,4 +18,4 @@ DATASET_SIZE = 11_000
 
 # Training parameters
 BATCH_SIZE = 250
-NUM_EPOCHS = 10
+NUM_EPOCHS = 50
