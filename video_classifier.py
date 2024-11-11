@@ -43,6 +43,10 @@ class Conv2Plus1d(nn.Module):
             nn.ReLU(),
         )
 
+    def forward(self, x):
+        return self.block(x)
+
+
 class VideoClassifier(nn.Module):
     def __init__(self, model_name='', num_layers=1, video_len=VIDEO_LEN):
         super(VideoClassifier, self).__init__()
