@@ -38,7 +38,7 @@ class Conv2Plus1d(nn.Module):
             # Then integrate temporal information across windows of three
             # contiuguous frames in the video using a 1x1 kernel.
             nn.Conv3d(hidden_size, out_depth, kernel_size=(3, 1, 1),
-                      padding=1, bias=False, stride=1),
+                      padding=(1, 0, 0), bias=False, stride=1),
             nn.BatchNorm3d(out_depth),
             nn.ReLU(),
         )
@@ -64,12 +64,13 @@ class VideoClassifier(nn.Module):
         if model_name == 'cnn':
             # This is a 2+1D variant of the "Minimal" network from image_classifier.py
             self.backbone = nn.Sequential(
-                Conv2Plus1d(1, 32),  # Vx32x32x1  -> Vx32x32x32
-                nn.AvgPool3d(2),     # Vx32x32x32 -> Vx16x16x32
-                Conv2Plus1d(32, 64), # Vx16x16x32 -> Vx16x16x64
-                nn.AvgPool3d(2),     # Vx16x16x64 -> Vx8x8x64
+                                     #    FxWxHxC  -> FxWxHxC
+                Conv2Plus1d(1, 32),  #  16x32x32x1 -> 16x32x32x32
+                nn.AvgPool3d(2),     # 16x32x32x32 -> 8x16x16x32
+                Conv2Plus1d(32, 64), #  8x16x16x32 -> 8x16x16x64
+                nn.AvgPool3d(2),     #  8x16x16x64 -> 4x8x8x64
                 nn.Flatten(),
-                nn.Linear(video_len * 8 * 8 * 64, 1024),
+                nn.Linear(4 * 8 * 8 * 64, 1024),
                 nn.ReLU()
             )
         elif model_name in recurrent_layer_types.keys():
@@ -112,6 +113,7 @@ class VideoClassifier(nn.Module):
             features = features.reshape(batch_size, steps, 1024)
             _, features = self.recurrent(features)
         else:
+            x = x.reshape(batch_size, num_channels, steps, height, width)
             features = self.backbone(x)
 
         return self.category_head(features), self.top_15_head(features)
