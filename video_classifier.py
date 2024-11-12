@@ -50,7 +50,6 @@ class Conv2Plus1d(nn.Module):
 class VideoClassifier(nn.Module):
     def __init__(self, model_name='', num_layers=1, video_len=VIDEO_LEN):
         super(VideoClassifier, self).__init__()
-        self.model_name = model_name
         self.video_len = video_len
 
         # A few different RNN variants to try, all with the same API.
@@ -87,7 +86,7 @@ class VideoClassifier(nn.Module):
             )
             # ... then we'll pass the features through the recurrent part of
             # the network for temporal integration.
-            self.recurrent = recurrent_layer_types['model_name'](
+            self.recurrent = recurrent_layer_types[model_name](
                 1024, 1024, num_layers, batch_first=True)
 
         # Reuse the classification heads from the image model (they will get
@@ -112,6 +111,8 @@ class VideoClassifier(nn.Module):
             # summarize the overall video.
             features = features.reshape(batch_size, steps, 1024)
             _, features = self.recurrent(features)
+            # Take only activations from the final layer.
+            features = features[-1]
         else:
             x = x.reshape(batch_size, num_channels, steps, height, width)
             features = self.backbone(x)
