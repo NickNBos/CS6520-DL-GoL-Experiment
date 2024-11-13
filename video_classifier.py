@@ -2,6 +2,7 @@ from pathlib import Path
 import warnings
 
 import polars as pl
+import torch
 from torch import nn
 from constants import MAX_PERIOD, VIDEO_LEN
 
@@ -89,8 +90,7 @@ class VideoClassifier(nn.Module):
             self.recurrent = recurrent_layer_types[model_name](
                 1024, 1024, num_layers, batch_first=True)
 
-        # Reuse the classification heads from the image model (they will get
-        # retrained from scratch).
+        # Define two heads for the two classification tasks.
         self.category_head = nn.Sequential(
             nn.Linear(1024, len(CATEGORY_NAMES)))
         self.top_15_head = nn.Sequential(
@@ -110,11 +110,13 @@ class VideoClassifier(nn.Module):
             # Now run the per-frame features through our recurrent network to
             # summarize the overall video.
             features = features.reshape(batch_size, steps, 1024)
-            _, features = self.recurrent(features)
-            # Take only activations from the final layer.
-            features = features[-1]
+            # Take just the final activations from the final layer, then pass
+            # them through one last ReLU before classification.
+            _, last_state = self.recurrent(features)
+            features = nn.functional.relu(last_state[-1])
         else:
-            x = x.reshape(batch_size, num_channels, steps, height, width)
+            # Put the time dimension next to the spatial ones for 3D conv.
+            x = torch.permute(x, (0, 2, 1, 3, 4))
             features = self.backbone(x)
 
         return self.category_head(features), self.top_15_head(features)
