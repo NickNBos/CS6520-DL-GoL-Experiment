@@ -49,7 +49,7 @@ class Conv2Plus1d(nn.Module):
 
 
 class VideoClassifier(nn.Module):
-    def __init__(self, model_name='', num_layers=1, video_len=VIDEO_LEN):
+    def __init__(self, model_name='gru', num_layers=1, video_len=VIDEO_LEN):
         super(VideoClassifier, self).__init__()
         self.video_len = video_len
 
@@ -110,10 +110,10 @@ class VideoClassifier(nn.Module):
             # Now run the per-frame features through our recurrent network to
             # summarize the overall video.
             features = features.reshape(batch_size, steps, 1024)
-            # Take just the final activations from the final layer, then pass
-            # them through one last ReLU before classification.
-            _, last_state = self.recurrent(features)
-            features = nn.functional.relu(last_state[-1])
+            # Take just the final outputs, then pass them through one last ReLU
+            # before classification.
+            outputs, _ = self.recurrent(features)
+            features = nn.functional.relu(outputs[:, -1, :])
         else:
             # Put the time dimension next to the spatial ones for 3D conv.
             x = torch.permute(x, (0, 2, 1, 3, 4))
@@ -134,13 +134,10 @@ def hp_model_arch():
         'cnn': {'model_name': 'cnn'},
         'gru1': {'model_name': 'gru', 'num_layers': 1},
         'gru2': {'model_name': 'gru', 'num_layers': 2},
-        'gru3': {'model_name': 'gru', 'num_layers': 3},
         'rnn1': {'model_name': 'rnn', 'num_layers': 1},
         'rnn2': {'model_name': 'rnn', 'num_layers': 2},
-        'rnn3': {'model_name': 'rnn', 'num_layers': 3},
         'lstm1': {'model_name': 'lstm', 'num_layers': 1},
         'lstm2': {'model_name': 'lstm', 'num_layers': 2},
-        'lstm3': {'model_name': 'lstm', 'num_layers': 3},
     }
     for expt_name, expt_args in conditions.items():
         title = f'model_arch = {expt_name}'
@@ -193,8 +190,8 @@ def tune_hyperparameters():
     print('Comparing different model architectures...')
     hp_model_arch()
 
-    # print('Comparing different video lengths...')
-    # hp_video_len()
+    print('Comparing different video lengths...')
+    hp_video_len()
 
 
 if __name__ == '__main__':
