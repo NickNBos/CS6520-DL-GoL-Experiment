@@ -134,13 +134,13 @@ def hp_model_arch():
         'cnn': {'model_name': 'cnn'},
         'gru1': {'model_name': 'gru', 'num_layers': 1},
         'gru2': {'model_name': 'gru', 'num_layers': 2},
-#        'gru3': {'model_name': 'gru', 'num_layers': 3}
-#        'rnn1':  {'model_name': 'rnn', num_layers': 1},
-#        'rnn2':  {'model_name': 'rnn', num_layers': 2},
-#        'rnn3':  {'model_name': 'rnn', num_layers': 3},
-#        'lstm1': {'model_name': 'lstm', num_layers': 1},
-#        'lstm2': {'model_name': 'lstm', num_layers': 2},
-#        'lstm3': {'model_name': 'lstm', num_layers': 3},
+        'gru3': {'model_name': 'gru', 'num_layers': 3},
+        'rnn1': {'model_name': 'rnn', 'num_layers': 1},
+        'rnn2': {'model_name': 'rnn', 'num_layers': 2},
+        'rnn3': {'model_name': 'rnn', 'num_layers': 3},
+        'lstm1': {'model_name': 'lstm', 'num_layers': 1},
+        'lstm2': {'model_name': 'lstm', 'num_layers': 2},
+        'lstm3': {'model_name': 'lstm', 'num_layers': 3},
     }
     for expt_name, expt_args in conditions.items():
         title = f'model_arch = {expt_name}'
