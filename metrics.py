@@ -268,7 +268,7 @@ def compare_runs(path, variant_names):
     for variant_name in variant_names:
         frames.append(
             pl.read_parquet(
-                path / 'train_log_{variant_name}.parquet'
+                path / f'train_log_{variant_name}.parquet'
             ).with_columns(
                 variant=variant_name
             ))
