@@ -286,7 +286,7 @@ def compare_runs(path, variant_names):
             (pl.col('task') == 'category') &
             (pl.col('variant') == variant_name)
         )['f1_score']
-        plt.plot(np.arange(NUM_EPOCHS), category_f1, label='category f1_score')
+        plt.plot(np.arange(NUM_EPOCHS), category_f1, label=variant_name)
     plt.gca().set(xlabel='Epochs', ylabel='F1 Score')
     plt.legend()
     plt.savefig(path / 'f1_score_category.png', dpi=600)
@@ -300,7 +300,7 @@ def compare_runs(path, variant_names):
             (pl.col('task') == 'top_15') &
             (pl.col('variant') == variant_name)
         )['f1_score']
-        plt.plot(np.arange(NUM_EPOCHS), top_15_f1, label='top_15 f1_score')
+        plt.plot(np.arange(NUM_EPOCHS), top_15_f1, label=variant_name)
     plt.gca().set(xlabel='Epochs', ylabel='F1 Score')
     plt.legend()
     plt.savefig(path / 'f1_score_top_15.png', dpi=600)
