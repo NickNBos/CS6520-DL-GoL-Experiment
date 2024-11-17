@@ -271,6 +271,10 @@ def compare_runs(path, variant_names):
                 path / f'train_log_{variant_name}.parquet'
             ).with_columns(
                 variant=pl.lit(variant_name)
+            ).group_by(
+                'task', 'variant', 'epoch', maintain_order=True
+            ).agg(
+                pl.col('f1_score').mean(),
             ))
     df = pl.concat(frames)
 
