@@ -9,7 +9,7 @@ from constants import MAX_PERIOD, VIDEO_LEN
 from dataset import get_split_dataset
 from image_classifier import CNNBlock
 from import_data import CATEGORY_NAMES, TOP_15_NAMES
-from metrics import MetricsTracker
+from metrics import MetricsTracker, compare_runs
 from simulate import simulate_batch
 from training import train_model, test_model
 
@@ -123,6 +123,9 @@ class VideoClassifier(nn.Module):
 
 
 def hp_optimizer():
+    path = Path('output/video_classifier/hp_optimizer')
+    path.mkdir(exist_ok=True, parents=True)
+
     optimizers = {
         'sgd': optim.SGD,
         'adam': optim.Adam,
@@ -130,9 +133,6 @@ def hp_optimizer():
     }
     for optim_name, optimizer in optimizers.items():
         title = f'optimizer = {optim_name}'
-        path = Path('output/video_classifier/hp_optimizer')
-        path.mkdir(exist_ok=True, parents=True)
-
         data_filename = path / f'train_log_{optim_name}.parquet'
         if data_filename.exists():
             print('Regenerating outputs from cached data...')
@@ -146,10 +146,14 @@ def hp_optimizer():
             metrics_tracker.get_summary().write_parquet(data_filename)
 
         metrics_tracker.summarize_training(path, optim_name, title)
+    compare_runs(path, optimizers.keys())
 
 
 def hp_model_arch():
-    conditions = {
+    path = Path('output/video_classifier/hp_model_arch')
+    path.mkdir(exist_ok=True, parents=True)
+
+    models = {
         'cnn': {'model_name': 'cnn'},
         'gru1': {'model_name': 'gru', 'num_layers': 1},
         'gru2': {'model_name': 'gru', 'num_layers': 2},
@@ -158,11 +162,8 @@ def hp_model_arch():
         'lstm1': {'model_name': 'lstm', 'num_layers': 1},
         'lstm2': {'model_name': 'lstm', 'num_layers': 2},
     }
-    for expt_name, expt_args in conditions.items():
+    for expt_name, expt_args in models.items():
         title = f'model_arch = {expt_name}'
-        path = Path('output/video_classifier/hp_model_arch')
-        path.mkdir(exist_ok=True, parents=True)
-
         data_filename = path / f'train_log_{expt_name}.parquet'
         if data_filename.exists():
             print('Regenerating outputs from cached data...')
@@ -176,20 +177,22 @@ def hp_model_arch():
             metrics_tracker.get_summary().write_parquet(data_filename)
 
         metrics_tracker.summarize_training(path, expt_name, title)
+    compare_runs(path, models.keys())
 
 
 def hp_video_len():
+    path = Path('output/video_classifier/hp_video_len')
+    path.mkdir(exist_ok=True, parents=True)
+
     # Does the model need to see multiple cycles of a periodic pattern to pick
     # up on that information? Let's find out.
-    for num_cycles in [1, 2, 3]:
+    cycle_options = [1, 2, 3]
+    for num_cycles in cycle_options:
         video_len = MAX_PERIOD * num_cycles
         expt_name = f'{num_cycles}x{MAX_PERIOD}'
         expt_args = {'video_len': video_len}
 
         title = f'video_len = {video_len}'
-        path = Path('output/video_classifier/hp_video_len')
-        path.mkdir(exist_ok=True, parents=True)
-
         data_filename = path / f'train_log_{expt_name}.parquet'
         if data_filename.exists():
             print('Regenerating outputs from cached data...')
@@ -203,9 +206,13 @@ def hp_video_len():
             metrics_tracker.get_summary().write_parquet(data_filename)
 
         metrics_tracker.summarize_training(path, expt_name, title)
+    compare_runs(path, map(str, cycle_options))
 
 
 def tune_hyperparameters():
+    print('Comparing different optimizers...')
+    hp_optimizer()
+
     print('Comparing different model architectures...')
     hp_model_arch()
 

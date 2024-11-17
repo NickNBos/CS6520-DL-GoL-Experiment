@@ -9,7 +9,7 @@ from constants import BATCH_SIZE, WORLD_SIZE
 
 from dataset import get_split_dataset
 from import_data import CATEGORY_NAMES, TOP_15_NAMES
-from metrics import MetricsTracker
+from metrics import MetricsTracker, bce, focal, soft_f1_score, compare_runs
 from training import train_model, test_model
 
 # Torch fires this warning on every call to load_state_dict()
@@ -129,7 +129,8 @@ class ImageClassifier(nn.Module):
 
 
 def hp_loss_func():
-    from metrics import bce, focal, soft_f1_score
+    path = Path('output/image_classifier/hp_loss_func')
+    path.mkdir(exist_ok=True, parents=True)
 
     loss_funcs = {
         'focal': focal,
@@ -138,9 +139,6 @@ def hp_loss_func():
     }
     for loss_name, loss_func in loss_funcs.items():
         title = f'loss = {loss_name}'
-        path = Path('output/image_classifier/hp_loss_func')
-        path.mkdir(exist_ok=True, parents=True)
-
         data_filename = path / f'train_log_{loss_name}.parquet'
         if data_filename.exists():
             print('Regenerating outputs from cached data...')
@@ -154,9 +152,13 @@ def hp_loss_func():
             metrics_tracker.get_summary().write_parquet(data_filename)
 
         metrics_tracker.summarize_training(path, loss_name, title)
+    compare_runs(path, loss_funcs.keys())
 
 
 def hp_optimizer():
+    path = Path('output/image_classifier/hp_optimizer')
+    path.mkdir(exist_ok=True, parents=True)
+
     optimizers = {
         'sgd': optim.SGD,
         'adam': optim.Adam,
@@ -164,9 +166,6 @@ def hp_optimizer():
     }
     for optim_name, optimizer in optimizers.items():
         title = f'optimizer = {optim_name}'
-        path = Path('output/image_classifier/hp_optimizer')
-        path.mkdir(exist_ok=True, parents=True)
-
         data_filename = path / f'train_log_{optim_name}.parquet'
         if data_filename.exists():
             print('Regenerating outputs from cached data...')
@@ -180,15 +179,16 @@ def hp_optimizer():
             metrics_tracker.get_summary().write_parquet(data_filename)
 
         metrics_tracker.summarize_training(path, optim_name, title)
+    compare_runs(path, optimizers.keys())
 
 
 def hp_task_mix():
+    path = Path('output/image_classifier/hp_task_mix')
+    path.mkdir(exist_ok=True, parents=True)
+
     top_15_fracs = [0.1, 0.3, 0.5, 0.7, 0.9]
     for top_15_frac in top_15_fracs:
         title = f'top 15 % = {int(100 * top_15_frac)}'
-        path = Path('output/image_classifier/hp_task_mix')
-        path.mkdir(exist_ok=True, parents=True)
-
         data_filename = path / f'train_log_{top_15_frac}.parquet'
         if data_filename.exists():
             print('Regenerating outputs from cached data...')
@@ -202,9 +202,13 @@ def hp_task_mix():
             metrics_tracker.get_summary().write_parquet(data_filename)
 
         metrics_tracker.summarize_training(path, str(top_15_frac), title)
+    compare_runs(path, map(str, top_15_fracs))
 
 
 def hp_model_arch():
+    path = Path('output/image_classifier/hp_model_arch')
+    path.mkdir(exist_ok=True, parents=True)
+
     # TODO: These "_with_coords" variants are inspired by CoordinateCNNs. They
     # make it possible to model spatial details even though CNNs are normally
     # translation invariant. I suspect this won't help for the image
@@ -224,9 +228,6 @@ def hp_model_arch():
     }
     for expt_name, (model_name, embed_coords) in conditions.items():
         title = f'model_arch = {expt_name}'
-        path = Path('output/image_classifier/hp_model_arch')
-        path.mkdir(exist_ok=True, parents=True)
-
         data_filename = path / f'train_log_{expt_name}.parquet'
         if data_filename.exists():
             print('Regenerating outputs from cached data...')
@@ -240,6 +241,7 @@ def hp_model_arch():
             metrics_tracker.get_summary().write_parquet(data_filename)
 
         metrics_tracker.summarize_training(path, expt_name, title)
+    compare_runs(path, conditions.keys())
 
 
 def tune_hyperparams():

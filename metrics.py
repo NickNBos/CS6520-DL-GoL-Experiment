@@ -260,4 +260,45 @@ class MetricsTracker():
         self.chart_f1_score(
             title, path / f'f1_score{suffix}.png')
         with open(path / f'summary{suffix}.txt', 'w') as file:
-            self.print_summary('train', file)
+            self.print_summary('validate', file)
+
+
+def compare_runs(path, variant_names):
+    frames = []
+    for variant_name in variant_names:
+        frames.append(
+            pl.read_parquet(
+                path / 'train_log_{variant_name}.parquet'
+            ).with_columns(
+                variant=variant_name
+            ))
+    df = pl.concat(frames)
+
+    plt.figure()
+    plt.suptitle('Category F1 Score')
+    plt.gca().set_ylim([0.0, 1.0])
+    for variant_name in variant_names:
+        category_f1 = df.filter(
+            (pl.col('task') == 'category') &
+            (pl.col('variant') == variant_name)
+        )['f1_score']
+        plt.plot(np.arange(NUM_EPOCHS), category_f1, label='category f1_score')
+    plt.gca().set(xlabel='Epochs', ylabel='F1 Score')
+    plt.legend()
+    plt.savefig(path / 'f1_score_category.png', dpi=600)
+    plt.close()
+
+    plt.figure()
+    plt.suptitle('Top 15 F1 Score')
+    plt.gca().set_ylim([0.0, 1.0])
+    for variant_name in variant_names:
+        top_15_f1 = df.filter(
+            (pl.col('task') == 'top_15') &
+            (pl.col('variant') == variant_name)
+        )['f1_score']
+        plt.plot(np.arange(NUM_EPOCHS), top_15_f1, label='top_15 f1_score')
+    plt.gca().set(xlabel='Epochs', ylabel='F1 Score')
+    plt.legend()
+    plt.savefig(path / 'f1_score_top_15.png', dpi=600)
+    plt.close()
+
