@@ -1,5 +1,5 @@
 import torch
-from torch import nn, optim
+from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import trange
 
@@ -18,7 +18,8 @@ def unpack_batch(batch):
     return batch_size, initial_state, true_category, true_pattern_id
 
 
-def train_model(model, train_data, validate_data, metrics_tracker):
+def train_model(model, train_data, validate_data, metrics_tracker,
+                optimizer_class=optim.SGD):
     # Prepare to load data
     train_loader = DataLoader(
         train_data, batch_size=BATCH_SIZE, shuffle=True)
@@ -27,7 +28,7 @@ def train_model(model, train_data, validate_data, metrics_tracker):
     model = model.to(DEVICE)
 
     # Prepare to optimize model parameters
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optimizer_class(model.parameters())
 
     # Train for the specified number of epochs
     progress = trange(NUM_EPOCHS * (len(train_data) + len(validate_data)))

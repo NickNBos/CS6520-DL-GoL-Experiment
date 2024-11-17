@@ -3,7 +3,7 @@ import warnings
 
 import polars as pl
 import torch
-from torch import nn
+from torch import nn, optim
 from constants import MAX_PERIOD, VIDEO_LEN
 
 from dataset import get_split_dataset
@@ -122,13 +122,32 @@ class VideoClassifier(nn.Module):
         return self.category_head(features), self.top_15_head(features)
 
 
-# CNN
-# RNN @ diff # layers, different gating variants
-# No video integration
-# TODO: Maybe try coordinate CNNs if that seems like it'd help?
-# TODO: Maybe try predicting period?
-# TODO: Maybe try bidi RNNs?
-# TODO: Consider normalizing by # of parameters?
+def hp_optimizer():
+    optimizers = {
+        'sgd': optim.SGD,
+        'adam': optim.Adam,
+        'adagrad': optim.Adagrad,
+    }
+    for optim_name, optimizer in optimizers.items():
+        title = f'optimizer = {optim_name}'
+        path = Path('output/video_classifier/hp_optimizer')
+        path.mkdir(exist_ok=True, parents=True)
+
+        data_filename = path / f'train_log_{optim_name}.parquet'
+        if data_filename.exists():
+            print('Regenerating outputs from cached data...')
+            metrics_tracker = MetricsTracker(pl.read_parquet(data_filename))
+        else:
+            print(f'Training with {optim_name}...')
+            model = VideoClassifier()
+            metrics_tracker = MetricsTracker()
+            train_data, validate_data, _ = get_split_dataset()
+            train_model(model, train_data, validate_data, metrics_tracker, optimizer)
+            metrics_tracker.get_summary().write_parquet(data_filename)
+
+        metrics_tracker.summarize_training(path, optim_name, title)
+
+
 def hp_model_arch():
     conditions = {
         'cnn': {'model_name': 'cnn'},

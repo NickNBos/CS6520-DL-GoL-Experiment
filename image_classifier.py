@@ -3,7 +3,7 @@ import warnings
 
 import polars as pl
 import torch
-from torch import nn
+from torch import nn, optim
 from torchvision.models import vgg11, VGG11_Weights
 from constants import BATCH_SIZE, WORLD_SIZE
 
@@ -156,6 +156,32 @@ def hp_loss_func():
         metrics_tracker.summarize_training(path, loss_name, title)
 
 
+def hp_optimizer():
+    optimizers = {
+        'sgd': optim.SGD,
+        'adam': optim.Adam,
+        'adagrad': optim.Adagrad,
+    }
+    for optim_name, optimizer in optimizers.items():
+        title = f'optimizer = {optim_name}'
+        path = Path('output/image_classifier/hp_optimizer')
+        path.mkdir(exist_ok=True, parents=True)
+
+        data_filename = path / f'train_log_{optim_name}.parquet'
+        if data_filename.exists():
+            print('Regenerating outputs from cached data...')
+            metrics_tracker = MetricsTracker(pl.read_parquet(data_filename))
+        else:
+            print(f'Training with {optim_name}...')
+            model = ImageClassifier()
+            metrics_tracker = MetricsTracker()
+            train_data, validate_data, _ = get_split_dataset()
+            train_model(model, train_data, validate_data, metrics_tracker, optimizer)
+            metrics_tracker.get_summary().write_parquet(data_filename)
+
+        metrics_tracker.summarize_training(path, optim_name, title)
+
+
 def hp_task_mix():
     top_15_fracs = [0.1, 0.3, 0.5, 0.7, 0.9]
     for top_15_frac in top_15_fracs:
@@ -220,6 +246,9 @@ def tune_hyperparams():
     print('Comparing loss functions...')
     hp_loss_func()
 
+    print('Comparing different optimizers...')
+    hp_optimizer()
+
     print('Comparing different task mixes...')
     hp_task_mix()
 
@@ -228,26 +257,27 @@ def tune_hyperparams():
 
 
 if __name__ == '__main__':
-    #tune_hyperparams()
-    path = Path('output/image_classifier')
-    path.mkdir(exist_ok=True, parents=True)
-    model_filename = path / 'model.pt'
+    tune_hyperparams()
 
-    model = ImageClassifier()
-    metrics_tracker = MetricsTracker()
-    train_data, validate_data, test_data = get_split_dataset()
+    # path = Path('output/image_classifier')
+    # path.mkdir(exist_ok=True, parents=True)
+    # model_filename = path / 'model.pt'
 
-    if model_filename.exists():
-        print('Using pre-trained model weights')
-        model.load_state_dict(torch.load(model_filename, weights_only=True))
-    else:
-        print('Training model...')
-        train_model(model, train_data, validate_data, metrics_tracker)
-        torch.save(model.state_dict(), model_filename)
-        metrics_tracker.get_summary().write_parquet(path / 'train_log.parquet')
-        metrics_tracker.summarize_training(path)
+    # model = ImageClassifier()
+    # metrics_tracker = MetricsTracker()
+    # train_data, validate_data, test_data = get_split_dataset()
 
-    print('Evaluating on test dataset...')
-    metrics_tracker.reset()
-    test_model(model, test_data, metrics_tracker)
-    metrics_tracker.print_summary('test')
+    # if model_filename.exists():
+    #     print('Using pre-trained model weights')
+    #     model.load_state_dict(torch.load(model_filename, weights_only=True))
+    # else:
+    #     print('Training model...')
+    #     train_model(model, train_data, validate_data, metrics_tracker)
+    #     torch.save(model.state_dict(), model_filename)
+    #     metrics_tracker.get_summary().write_parquet(path / 'train_log.parquet')
+    #     metrics_tracker.summarize_training(path)
+
+    # print('Evaluating on test dataset...')
+    # metrics_tracker.reset()
+    # test_model(model, test_data, metrics_tracker)
+    # metrics_tracker.print_summary('test')
