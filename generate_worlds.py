@@ -110,7 +110,7 @@ def generate_one():
                 col_index = col_offset
         
         
-        # Pehaps once the col index has outpaced the boundary, reset it to zero
+        # Perhaps once the col index has outpaced the boundary, reset it to zero
         # and shift the row index up past the maximum row observed
         
         # Move at least 1, at most 4
@@ -126,23 +126,47 @@ def generate_one():
     return data.tolist(), label.tolist()
 
 
+def truncate_labels(data, labels, pad_size = 1):
+    data = np.array(data)
+    labels = np.array(labels)
+    print(data.shape, labels.shape)
+    
+    # There's an easy enough way to parallelize this, but I'd rather not
+    for label in labels:
+        # The maximum bounds are the label shape (really the world shape)
+        x, y = label.shape
+        
+        for i in range(x):
+            x_lower = max(0, i-pad_size)
+            x_upper = min(i+pad_size, x) + 1
+            for j in range(y):
+                y_lower = max(0, j-pad_size)
+                y_upper = min(j+pad_size, y) + 1
+                
+                # Erase the label where the actual pattern's live cells
+                # are too far away
+                label[i,j] = label[i, j] * np.max(data[x_lower:x_upper,y_lower:y_upper])
+    
+    return labels.tolist()
+    
+    
 def visualize_world(data, label):
-    plt.figure('Data', clear=True)
-    plt.imshow(data, cmap="Greys")
-    plt.figure('Labels', clear=True)
+    # plt.figure('Data', clear=True)
+    # plt.imshow(data, cmap="Greys")
+    # plt.figure('Labels', clear=True)
     
     label = np.array(label)
-    colors = ['Reds','Greens','Blues', 'Purples']
+    # colors = ['Reds','Greens','Blues', 'Purples']
     combined_label = np.zeros(label.shape[1:])
     for idx, channel in enumerate(label):
-        color = colors[idx]
+        # color = colors[idx]
         combined_label += 2*(idx+1)*np.array(channel)
         # plt.subplot(2,2,idx+1)
-        plt.imshow(channel, cmap=color, alpha = 0.3)
+        # plt.imshow(channel, cmap=color, alpha = 0.3)
     
     plt.figure('combo', clear=True)
     plt.imshow(combined_label, cmap='YlGnBu', alpha = 0.9)
-    plt.imshow(data, cmap="Greys", alpha=0.5)
+    plt.imshow(data, cmap="Greys", alpha=0.6)
     
     
     
@@ -174,5 +198,8 @@ if __name__ == '__main__':
     world_df = load_world_df()
     
     world_instance = world_df[np.random.randint(len(world_df))]
+    d = world_instance['world pattern'][0].to_list()
+    l = world_instance['label'][0].to_list()
     
-    visualize_world(world_instance['world pattern'][0].to_list(), world_instance['label'][0].to_list())
+    l = truncate_labels(d, l,2)
+    visualize_world(d, l)
