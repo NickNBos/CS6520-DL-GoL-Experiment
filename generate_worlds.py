@@ -129,7 +129,6 @@ def generate_one():
 def truncate_labels(data, labels, pad_size = 1):
     data = np.array(data)
     labels = np.array(labels)
-    print(data.shape, labels.shape)
     
     # There's an easy enough way to parallelize this, but I'd rather not
     for label in labels:
@@ -196,7 +195,7 @@ def generate_many(world_count = 1000):
 if __name__ == '__main__':
     # generate_many()
     world_df = load_world_df()
-    
+    print(world_df)
     world_instance = world_df[np.random.randint(len(world_df))]
     d = world_instance['world pattern'][0].to_list()
     l = world_instance['label'][0].to_list()
