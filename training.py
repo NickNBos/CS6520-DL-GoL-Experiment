@@ -1,3 +1,6 @@
+from copy import deepcopy
+from math import inf
+
 import torch
 from torch import optim
 from torch.utils.data import DataLoader
@@ -30,6 +33,10 @@ def train_model(model, train_data, validate_data, metrics_tracker,
     # Prepare to optimize model parameters
     optimizer = optimizer_class(model.parameters())
 
+    # Keep track of the best model parameters found during training.
+    min_loss = inf
+    best_state = None
+
     # Train for the specified number of epochs
     progress = trange(NUM_EPOCHS * (len(train_data) + len(validate_data)))
     for epoch in range(NUM_EPOCHS):
@@ -44,6 +51,9 @@ def train_model(model, train_data, validate_data, metrics_tracker,
             loss = metrics_tracker.score_batch(
                 true_category, pred_category_oh,
                 true_pattern_id, pred_pattern_id_oh, 'train', epoch)
+            if loss < min_loss:
+                min_loss = float(loss)
+                best_state = deepcopy(model.state_dict())
             loss.backward()
             optimizer.step()
 
@@ -61,6 +71,7 @@ def train_model(model, train_data, validate_data, metrics_tracker,
                     true_category, pred_category_oh,
                     true_pattern_id, pred_pattern_id_oh, 'validate', epoch)
                 progress.update(batch_size)
+    return best_state
 
 
 def test_model(model, test_data, metrics_tracker):

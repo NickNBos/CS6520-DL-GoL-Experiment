@@ -236,28 +236,36 @@ def tune_hyperparams():
     hp_model_arch()
 
 
+def get_model():
+    model = ImageClassifier()
+    model.load_state_dict(
+        torch.load('output/image_classifier/model.pt', weights_only=True))
+    return model
+
+
 if __name__ == '__main__':
-    tune_hyperparams()
+    # tune_hyperparams()
 
-    # path = Path('output/image_classifier')
-    # path.mkdir(exist_ok=True, parents=True)
-    # model_filename = path / 'model.pt'
+    path = Path('output/image_classifier')
+    path.mkdir(exist_ok=True, parents=True)
+    model_filename = path / 'model.pt'
 
-    # model = ImageClassifier()
-    # train_data, validate_data, test_data = get_split_dataset()
-    # metrics_tracker = MetricsTracker()
+    model = ImageClassifier()
+    train_data, validate_data, test_data = get_split_dataset()
+    metrics_tracker = MetricsTracker()
 
-    # if model_filename.exists():
-    #     print('Using pre-trained model weights')
-    #     model.load_state_dict(torch.load(model_filename, weights_only=True))
-    # else:
-    #     print('Training model...')
-    #     train_model(model, train_data, validate_data, metrics_tracker)
-    #     torch.save(model.state_dict(), model_filename)
-    #     metrics_tracker.get_summary().write_parquet(path / 'train_log.parquet')
-    #     metrics_tracker.summarize_training(path)
+    if model_filename.exists():
+        print('Using pre-trained model weights')
+        model.load_state_dict(torch.load(model_filename, weights_only=True))
+    else:
+        print('Training model...')
+        state_dict = train_model(model, train_data, validate_data, metrics_tracker)
+        torch.save(state_dict, model_filename)
+        model.load_state_dict(state_dict)
+        metrics_tracker.get_summary().write_parquet(path / 'train_log.parquet')
+        metrics_tracker.summarize_training(path)
 
-    # print('Evaluating on test dataset...')
-    # metrics_tracker.reset()
-    # test_model(model, test_data, metrics_tracker)
-    # metrics_tracker.print_summary('test')
+    print('Evaluating on test dataset...')
+    metrics_tracker.reset()
+    test_model(model, test_data, metrics_tracker)
+    metrics_tracker.print_summary('test')
