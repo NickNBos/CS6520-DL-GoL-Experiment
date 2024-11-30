@@ -1,3 +1,5 @@
+from time import perf_counter
+
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
@@ -58,13 +60,19 @@ class MetricsTracker():
         self.loss_func = loss_func
         self.frames = []
         self.summary = summary
+        self.last_update = perf_counter()
 
     def reset(self):
         self.frames = []
         self.summary = None
+        self.last_update = perf_counter()
 
     def score_batch(self, true_category, pred_category_oh,
                     true_pattern_id, pred_pattern_id_oh, mode, epoch=None):
+        now = perf_counter()
+        epoch_time = now - self.last_update
+        self.last_update = now
+
         # Compute canonical forms for the category and pattern data, as raw
         # values and as one-hot encodings.
         true_category = true_category.squeeze()
@@ -92,6 +100,7 @@ class MetricsTracker():
                 'mode': mode,
                 'epoch': epoch,
                 'loss': loss,
+                'time': epoch_time,
                 'true_positives': (
                     ((true_category == cat_id) &
                      (pred_category == cat_id))
@@ -112,6 +121,7 @@ class MetricsTracker():
                 'mode': mode,
                 'epoch': epoch,
                 'loss': loss,
+                'time': epoch_time,
                 'true_positives': (
                     ((true_pattern_id == pattern_id) &
                      (pred_pattern_id == pattern_id))
@@ -137,6 +147,7 @@ class MetricsTracker():
                 'task', 'label', 'mode', 'epoch', maintain_order=True
             # Sum up the raw counts.
             ).agg(
+                pl.col('time').mean(),
                 pl.col('loss').mean(),
                 pl.col('true_positives').sum(),
                 pl.col('false_positives').sum(),
@@ -157,7 +168,16 @@ class MetricsTracker():
         return self.summary
 
     def print_summary(self, mode, file=None):
-        df = self.get_summary().filter(
+        df = self.get_summary()
+        run_time = df.group_by(
+            'mode', 'epoch'
+        ).agg(
+            pl.col('time').first()
+        )['time'].sum()
+        print(f'Total training time: {run_time:.2f} seconds', file=file)
+        print(file=file)
+
+        df = df.filter(
             # If there's more than one epoch, just look at the last one.
             (pl.col('epoch').is_null()) | (pl.col('epoch') == NUM_EPOCHS - 1) &
             # Only look at data from the this mode (train / validate / test)
@@ -259,7 +279,7 @@ class MetricsTracker():
             title, path / f'pr_trajectory{suffix}.png')
         self.chart_f1_score(
             title, path / f'f1_score{suffix}.png')
-        with open(path / f'summary{suffix}.txt', 'w') as file:
+        with open(path / f'perf_summary{suffix}.txt', 'w') as file:
             self.print_summary('validate', file)
 
 
@@ -305,4 +325,3 @@ def compare_runs(path, variant_names):
     plt.legend()
     plt.savefig(path / 'f1_score_top_15.png', dpi=600)
     plt.close()
-

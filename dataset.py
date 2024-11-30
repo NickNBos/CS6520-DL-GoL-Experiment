@@ -10,7 +10,7 @@ from simulate import simulate_one
 SPLIT_RATIO = (70, 15, 15) # train, validate, test
 
 # Overrepresent the top 15 patterns to this fraction of the total dataset.
-TOP_15_FRAC = 0.3
+TOP_15_FRAC = 0.5
 
 
 class GameOfLifeDataset(Dataset):

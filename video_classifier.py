@@ -4,6 +4,7 @@ import warnings
 import polars as pl
 import torch
 from torch import nn, optim
+from torchinfo import summary
 from constants import MAX_PERIOD, VIDEO_LEN
 
 from dataset import get_split_dataset
@@ -49,7 +50,7 @@ class Conv2Plus1d(nn.Module):
 
 
 class VideoClassifier(nn.Module):
-    def __init__(self, model_name='gru', num_layers=1, video_len=VIDEO_LEN):
+    def __init__(self, model_name='cnn', num_layers=1, video_len=VIDEO_LEN):
         super(VideoClassifier, self).__init__()
         self.video_len = video_len
 
@@ -62,15 +63,16 @@ class VideoClassifier(nn.Module):
 
         # TODO: Implement different temporal models...
         if model_name == 'cnn':
+            frame_multiplier = (video_len + 1) // 2 // 2
             # This is a 2+1D variant of the "Minimal" network from image_classifier.py
             self.backbone = nn.Sequential(
-                                     #    FxWxHxC  -> FxWxHxC
-                Conv2Plus1d(1, 32),  #  16x32x32x1 -> 16x32x32x32
-                nn.AvgPool3d(2),     # 16x32x32x32 -> 8x16x16x32
-                Conv2Plus1d(32, 64), #  8x16x16x32 -> 8x16x16x64
-                nn.AvgPool3d(2),     #  8x16x16x64 -> 4x8x8x64
+                                     #     FxWxHxC -> FxWxHxC
+                Conv2Plus1d(1, 32),  #  11x32x32x1 -> 11x32x32x32
+                nn.AvgPool3d(2),     # 11x32x32x32 -> 5x16x16x32
+                Conv2Plus1d(32, 64), #  5x16x16x32 -> 5x16x16x64
+                nn.AvgPool3d(2),     #  5x16x16x64 -> 2x8x8x64
                 nn.Flatten(),
-                nn.Linear(4 * 8 * 8 * 64, 1024),
+                nn.Linear(frame_multiplier * 8 * 8 * 64, 1024),
                 nn.ReLU()
             )
         elif model_name in recurrent_layer_types.keys():
@@ -140,8 +142,8 @@ def hp_optimizer():
         else:
             print(f'Training with {optim_name}...')
             model = VideoClassifier()
-            metrics_tracker = MetricsTracker()
             train_data, validate_data, _ = get_split_dataset()
+            metrics_tracker = MetricsTracker()
             train_model(model, train_data, validate_data, metrics_tracker, optimizer)
             metrics_tracker.get_summary().write_parquet(data_filename)
 
@@ -156,11 +158,11 @@ def hp_model_arch():
     models = {
         'cnn': {'model_name': 'cnn'},
         'gru1': {'model_name': 'gru', 'num_layers': 1},
-        'gru2': {'model_name': 'gru', 'num_layers': 2},
+        # 'gru2': {'model_name': 'gru', 'num_layers': 2},
         'rnn1': {'model_name': 'rnn', 'num_layers': 1},
-        'rnn2': {'model_name': 'rnn', 'num_layers': 2},
+        # 'rnn2': {'model_name': 'rnn', 'num_layers': 2},
         'lstm1': {'model_name': 'lstm', 'num_layers': 1},
-        'lstm2': {'model_name': 'lstm', 'num_layers': 2},
+        # 'lstm2': {'model_name': 'lstm', 'num_layers': 2},
     }
     for expt_name, expt_args in models.items():
         title = f'model_arch = {expt_name}'
@@ -171,10 +173,12 @@ def hp_model_arch():
         else:
             print(f'Training with {expt_name}...')
             model = VideoClassifier(**expt_args)
-            metrics_tracker = MetricsTracker()
             train_data, validate_data, _ = get_split_dataset()
+            metrics_tracker = MetricsTracker()
             train_model(model, train_data, validate_data, metrics_tracker)
             metrics_tracker.get_summary().write_parquet(data_filename)
+            with open(path / f'model_summary_{expt_name}.txt', 'w') as file:
+                print(summary(model, verbose=0), file=file)
 
         metrics_tracker.summarize_training(path, expt_name, title)
     compare_runs(path, models.keys())
@@ -200,18 +204,18 @@ def hp_video_len():
         else:
             print(f'Training with {expt_name}...')
             model = VideoClassifier(**expt_args)
-            metrics_tracker = MetricsTracker()
             train_data, validate_data, _ = get_split_dataset()
+            metrics_tracker = MetricsTracker()
             train_model(model, train_data, validate_data, metrics_tracker)
             metrics_tracker.get_summary().write_parquet(data_filename)
 
         metrics_tracker.summarize_training(path, expt_name, title)
-    compare_runs(path, map(str, cycle_options))
+    compare_runs(path, [f'{num_cycles}x{MAX_PERIOD}' for num_cycles in cycle_options])
 
 
 def tune_hyperparameters():
-    print('Comparing different optimizers...')
-    hp_optimizer()
+    # print('Comparing different optimizers...')
+    # hp_optimizer()
 
     print('Comparing different model architectures...')
     hp_model_arch()
@@ -228,8 +232,8 @@ if __name__ == '__main__':
     # model_filename = path / 'model.pt'
 
     # model = VideoClassifier()
-    # metrics_tracker = MetricsTracker()
     # train_data, validate_data, test_data = get_split_dataset()
+    # metrics_tracker = MetricsTracker()
 
     # if model_filename.exists():
     #     print('Using pre-trained model weights')
