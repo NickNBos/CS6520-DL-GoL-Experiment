@@ -10,7 +10,7 @@ from dataset import load_filtered_data
 import image_classifier, video_classifier
 from simulate import simulate_batch
 from metrics import MetricsTracker
-from import_data import TOP_15_NAMES
+from import_data import CATEGORY_NAMES, TOP_15_NAMES
 
 catagolue_df = load_filtered_data()
 
@@ -123,7 +123,8 @@ def test_predecessors():
         metrics_tracker.score_batch(
             true_category, pred_category_oh,
             true_pattern_id, pred_pattern_id_oh, mode='test')
-        metrics_tracker.print_summary(mode='test')
+        with open(f'output/{name}/test_predecessor.txt', 'w') as file:
+            metrics_tracker.print_summary(mode='test', file=file)
 
 
 def get_variants(patterns):
@@ -142,8 +143,8 @@ def get_variants(patterns):
             # Keep one variant unchanged. For all the others, randomly change
             # just one cell.
             if v > 0:
-                row = np.random.randint(0, rows+2)
-                col = np.random.randint(0, cols+2)
+                row = np.random.randint(0, rows+2) % WORLD_SIZE
+                col = np.random.randint(0, cols+2) % WORLD_SIZE
                 initial_states[p, v, row, col] = 1 - initial_states[p, v, row, col]
 
     # Simulate all the variants of all the patterns and grab the last frame.
@@ -156,7 +157,7 @@ def get_variants(patterns):
     expected = final_state[::num_variations]
     variants = final_state.reshape(
         -1, num_variations, WORLD_SIZE, WORLD_SIZE
-    )[:, 1:, :, :].reshape(15, -1, WORLD_SIZE, WORLD_SIZE)
+    )[:, 1:, :, :].reshape(num_patterns, -1, WORLD_SIZE, WORLD_SIZE)
 
     # Go through all the patterns and find examples where changing one pixel
     # did not affect the final results, and where it resulted in the pattern
@@ -185,50 +186,60 @@ def get_variants(patterns):
 
 
 def test_variants():
-    df = catagolue_df.filter(
-        pl.col('top_15') < 15
-    )
+    # Pick the top 15 patterns plus 15 other examples from each category.
+    df = pl.concat([
+        catagolue_df.filter(pl.col('top_15') < 15),
+        catagolue_df.filter(
+            (pl.col('top_15') == 15) & (pl.col('category') == 0)).sample(15),
+        catagolue_df.filter(
+            (pl.col('top_15') == 15) & (pl.col('category') == 1)).sample(15),
+        catagolue_df.filter(
+            (pl.col('top_15') == 15) & (pl.col('category') == 2)).sample(15),
+    ])
+
+    # Try randomly tweaking each pattern by one cell and find examples where
+    # that either had no effect, or made the pattern die out completely.
     patterns = [torch.tensor(pattern) for pattern in df['pattern']]
-    categories = df['category']
-    pattern_id = df['top_15']
     unchanged, fizzlers = get_variants(patterns)
 
-    # TODO: run the models on the variants and verify its output.
-    # initial_state, true_category, true_pattern_id = get_predecessors()
-    # for name, model in get_models().items():
-    #     metrics_tracker = MetricsTracker()
-    #     pred_category_oh, pred_pattern_id_oh = model.forward(initial_state)
-
-    #     print(f'Results for {name}')
-    #     metrics_tracker.score_batch(
-    #         true_category, pred_category_oh,
-    #         true_pattern_id, pred_pattern_id_oh, mode='test')
-    #     metrics_tracker.print_summary(mode='test')
-
-    i = 1
-    for (p, u, f) in zip(patterns, unchanged, fizzlers):
-        rows, cols = p.shape
-        w = torch.zeros(32, 32)
-        w[1:rows+1, 1:cols+1] = p
-        plt.subplot(3, 15, i)
-        plt.imshow(w.cpu(), cmap='Greys')
-        plt.axis('off')
+    # Merge all the examples we found into flat lists for checking against our
+    # model.
+    initial_state = []
+    true_category = []
+    true_pattern_id = []
+    for (c, t, u, f) in zip(df['category'], df['top_15'], unchanged, fizzlers):
         if u is not None:
-            plt.subplot(3, 15, i+15)
-            plt.imshow(u.cpu(), cmap='Greys')
-            plt.axis('off')
+            initial_state.append(u)
+            true_category.append(c)
+            true_pattern_id.append(t)
         if f is not None:
-            plt.subplot(3, 15, i+30)
-            plt.imshow(f.cpu(), cmap='Greys')
-            plt.axis('off')
-        i += 1
-    plt.tight_layout()
-    plt.show()
+            initial_state.append(f)
+            true_category.append(CATEGORY_NAMES.index('other'))
+            true_pattern_id.append(TOP_15_NAMES.index('other'))
+
+    # Put all the data into cuda tensors of the right shape.
+    initial_state = torch.stack(
+        initial_state
+    ).reshape(-1, 1, WORLD_SIZE, WORLD_SIZE).cuda()
+    true_category = torch.tensor(true_category).cuda()
+    true_pattern_id = torch.tensor(true_pattern_id).cuda()
+
+    # Now run both models on these variations and see how they perform.
+    for name, model in get_models().items():
+        metrics_tracker = MetricsTracker()
+        pred_category_oh, pred_pattern_id_oh = model.forward(initial_state)
+
+        print(f'Results for {name}')
+        metrics_tracker.score_batch(
+            true_category, pred_category_oh,
+            true_pattern_id, pred_pattern_id_oh, mode='test')
+        with open(f'output/{name}/test_variants.txt', 'w') as file:
+            metrics_tracker.print_summary(mode='test', file=file)
 
 
 if __name__ == '__main__':
-    # print('Testing on predecessors of the top 15 patterns...')
-    # test_predecessors()
+    print('Testing on predecessors of the top 15 patterns...')
+    test_predecessors()
 
-    #test_variants()
+    print('Testing on patterns modified by one cell...')
     test_variants()
