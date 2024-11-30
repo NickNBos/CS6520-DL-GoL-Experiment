@@ -90,6 +90,8 @@ def get_predecessors():
     all_patterns = []
     all_categories = []
     all_pattern_ids = []
+    # Go through all the RLE patterns in the dict above and turn them into
+    # tensors similar to what you'd get from the real dataset.
     for (name, rle_list) in predecessor_dict.items():
         patterns = make_worlds([decode_rle(rle) for rle in rle_list])
         pattern_id = TOP_15_NAMES.index(name)
@@ -123,32 +125,50 @@ def test_predecessors():
             true_pattern_id, pred_pattern_id_oh, mode='test')
         metrics_tracker.print_summary(mode='test')
 
+
 def get_variants(patterns):
     num_patterns = len(patterns)
     num_variations = 50
+
+    # Prepare to simulate many variations of all patterns.
     initial_states = torch.zeros(
         (num_patterns, num_variations, WORLD_SIZE, WORLD_SIZE))
     for p, pattern in enumerate(patterns):
         for v in range(num_variations):
+            # Generate a world-sized initial state from this pattern.
             rows, cols = pattern.shape
             initial_states[p, v, 1:rows+1, 1:cols+1] = pattern
+
+            # Keep one variant unchanged. For all the others, randomly change
+            # just one cell.
             if v > 0:
                 row = np.random.randint(0, rows+2)
                 col = np.random.randint(0, cols+2)
                 initial_states[p, v, row, col] = 1 - initial_states[p, v, row, col]
+
+    # Simulate all the variants of all the patterns and grab the last frame.
     final_state = simulate_batch(
         initial_states.reshape(-1, 1, WORLD_SIZE, WORLD_SIZE), 50
     )[:, -1, 0, :, :]
+
+    # Separate out the final state from the unmodified variant from all the
+    # modified ones.
     expected = final_state[::num_variations]
     variants = final_state.reshape(
         -1, num_variations, WORLD_SIZE, WORLD_SIZE
     )[:, 1:, :, :].reshape(15, -1, WORLD_SIZE, WORLD_SIZE)
 
+    # Go through all the patterns and find examples where changing one pixel
+    # did not affect the final results, and where it resulted in the pattern
+    # completely dying out (a "fizzler").
     unchanged = []
     fizzlers = []
     for p in range(num_patterns):
         sample_unchanged = None
         sample_fizzler = None
+
+        # Go through all the variants of this pattern and save the initial
+        # state from one example of each type.
         for v, variant in enumerate(variants[p]):
             if torch.equal(expected[p], variant):
                 sample_unchanged = initial_states[p, v + 1]
@@ -156,6 +176,11 @@ def get_variants(patterns):
                 sample_fizzler = initial_states[p, v + 1]
         unchanged.append(sample_unchanged)
         fizzlers.append(sample_fizzler)
+
+    # Returns two lists parallel with the input patterns. Each list contains
+    # one example of a one-cell that has no effect or makes the pattern fizzle,
+    # if one could be found. Nones appear in the list where no such example
+    # could be found.
     return unchanged, fizzlers
 
 
