@@ -5,7 +5,7 @@ WORLD_SIZE = 32
 MAX_PERIOD = 5
 
 # How long each simulation video to analyze will be.
-VIDEO_LEN = MAX_PERIOD * 3
+VIDEO_LEN = MAX_PERIOD * 1
 
 # How many augmented variations of each image to put in the dataset.
 VARIATIONS_PER_IMAGE = 10
@@ -18,4 +18,4 @@ DATASET_SIZE = 11_000
 
 # Training parameters
 BATCH_SIZE = 250
-NUM_EPOCHS = 50
+NUM_EPOCHS = 100
