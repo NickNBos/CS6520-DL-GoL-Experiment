@@ -176,29 +176,52 @@ def generate_many(world_count = 1000):
     
     worlds = []
     labels = []
-    
+    truncated_labels = []
     for i in range(world_count):
         print(f"{i}/{world_count}")
         
         data, label = generate_one()
         
+        t_l = truncate_labels(data, label)
+        
         worlds.append(data)
         labels.append(label)
-    
+        truncated_labels.append(t_l)
     
     world_df = pl.DataFrame({"world pattern":worlds,
-                             "label":labels})
+                             "label":labels,
+                             "tight_labels":truncated_labels})
     
-    world_df.write_parquet(OUTPUT_PATH)
+    if OUTPUT_PATH.exists():
+        old_df = pl.read_parquet(OUTPUT_PATH)
+        old_df.extend(world_df)
+        old_df.write_parquet(OUTPUT_PATH)
+    else:
+        world_df.write_parquet(OUTPUT_PATH)
     
     
 if __name__ == '__main__':
-    # generate_many()
+    # generate_many(1000)
     world_df = load_world_df()
-    print(world_df)
-    world_instance = world_df[np.random.randint(len(world_df))]
-    d = world_instance['world pattern'][0].to_list()
-    l = world_instance['label'][0].to_list()
+    # print(world_df)
+    # world_instance = world_df[np.random.randint(len(world_df))]
+    # tightened_labels = []
+    # for world_idx in range(len(world_df)):
+    #     world_instance = world_df[world_idx]
+    #     d = world_instance['world pattern'][0].to_list()
+    #     l = world_instance['label'][0].to_list()
+    #     t_l = truncate_labels(d, l)
+    #     tightened_labels.append(t_l)
+        
+    #     print(world_idx)
+        
+    # d = world_instance['world pattern'][0].to_list()
+    # t = world_instance['tight_labels'][0].to_list()
+    # world_df = world_df.with_columns(
+    #     tight_labels = t_l
+    # )
+    # world_df.write_parquet(OUTPUT_PATH)
+    # print(world_df)
+    # l = truncate_labels(d, l,2)
     
-    l = truncate_labels(d, l,2)
-    visualize_world(d, l)
+    # visualize_world(d, t)
