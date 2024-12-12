@@ -190,7 +190,7 @@ def generate_many(world_count = 1000):
     
     world_df = pl.DataFrame({"world pattern":worlds,
                              "label":labels,
-                             "tight_labels":truncated_labels})
+                             "tight label":truncated_labels})
     
     if OUTPUT_PATH.exists():
         old_df = pl.read_parquet(OUTPUT_PATH)
@@ -203,25 +203,50 @@ def generate_many(world_count = 1000):
 if __name__ == '__main__':
     # generate_many(1000)
     world_df = load_world_df()
+    
+    # Fix first 1000
+    
+    # for idx in range(1000):
+    #     row = world_df[idx]
+    #     world_df[idx, 'tight_labels'] = truncate_labels(row['world pattern'][0].to_list(), row['label'][0].to_list())
+    
+    
+    
     # print(world_df)
     # world_instance = world_df[np.random.randint(len(world_df))]
-    # tightened_labels = []
-    # for world_idx in range(len(world_df)):
-    #     world_instance = world_df[world_idx]
-    #     d = world_instance['world pattern'][0].to_list()
-    #     l = world_instance['label'][0].to_list()
-    #     t_l = truncate_labels(d, l)
-    #     tightened_labels.append(t_l)
-        
-    #     print(world_idx)
+    tightened_labels = []
+    for world_idx in range(1000):
+        print(world_idx)
+        world_instance = world_df[world_idx]
+        d = world_instance['world pattern'][0].to_list()
+        l = world_instance['label'][0].to_list()
+        t_l = truncate_labels(d, l)
+        tightened_labels.append(t_l)
+    
+    for world_idx in range(1000,len(world_df)):
+        print(world_idx)
+        world_instance = world_df[world_idx]
+        t_l = world_instance['tight_labels']
+        tightened_labels.append(t_l[0].to_list())
+    
+    
+    s = pl.Series('tight label', tightened_labels)
+    world_df.replace_column(2, s)
+    print(world_df)
         
     # d = world_instance['world pattern'][0].to_list()
-    # t = world_instance['tight_labels'][0].to_list()
+    # t = world_instance['tight label'][0].to_list()
     # world_df = world_df.with_columns(
-    #     tight_labels = t_l
+    #     tight_labels = tightened_labels
     # )
     # world_df.write_parquet(OUTPUT_PATH)
     # print(world_df)
     # l = truncate_labels(d, l,2)
     
     # visualize_world(d, t)
+    
+    ex = world_df[5000]
+    
+    d = ex['world pattern'][0].to_list()
+    t = ex['tight label'][0].to_list()
+    visualize_world(d, t)
